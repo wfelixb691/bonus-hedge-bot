@@ -1,0 +1,56 @@
+{
+  "accounts": {
+    "account_a": {
+      "name": "Account A (Master 100870 / Grid STP)",
+      "login": 100870,
+      "password": "",
+      "server": "",
+      "terminal_path": ""
+    },
+    "account_b": {
+      "name": "Account B (Slave 100871 / Bonus 20%)",
+      "login": 100871,
+      "password": "",
+      "server": "",
+      "terminal_path": ""
+    }
+  },
+  "grid": {
+    "enabled": true,
+    "symbol": "XAUUSD",
+    "direction": "SELL",
+    "initial_lot": 0.10,
+    "auto_scale_lot": true,
+    "grid_step_points": 2000,
+    "max_layers": 10,
+    "take_profit_points": 2500,
+    "basket_tp_dollars": 31.74,
+    "comment_prefix": "GRID_S"
+  },
+
+  "hedging": {
+    "enabled": true,
+    "lot_mode": "multiplier",
+    "multiplier": 1.1,
+    "min_lot": 0.01,
+    "max_lot": 50.0,
+    "magic_number": 888999,
+    "comment_prefix": "CT#",
+    "slippage_points": 50,
+    "sync_close": true,
+    "sync_sl_tp": false,
+    "execution_delay_ms": 0,
+    "retry_attempts": 3,
+    "retry_delay_ms": 250
+  },
+  "symbol_mapping": {
+    "xauusd.std": "xauusd.std",
+    "XAUUSD": "XAUUSD",
+    "GOLD": "GOLD"
+  },
+  "monitoring": {
+    "scan_interval_ms": 100,
+    "state_file": "hedge_state.json",
+    "log_file": "bot_hedger.log"
+  }
+}

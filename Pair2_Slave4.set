@@ -1,0 +1,14 @@
+InpSymbol=XAUUSD
+InpLotMultiplier=1.10
+InpCombinedNetTP=31.74
+InpSpreadBufferUSD=25.0
+InpMagic=888992
+InpCommentPrefix=CT2#
+InpSlippage=50
+InpMinBonusCredit=100.0
+InpHarvestOnMasterMC=true
+InpMasterFile=bonus_hedge_master_2.dat
+InpSlaveFile=bonus_hedge_slave_2.dat
+InpCmdToSlaveFile=bonus_cmd_to_slave_2.dat
+InpCmdToMasterFile=bonus_cmd_to_master_2.dat
+InpTimerMS=50

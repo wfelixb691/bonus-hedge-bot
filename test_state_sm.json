@@ -1,0 +1,16 @@
+{
+  "pairs": {
+    "13511868": {
+      "master_ticket": 13511868,
+      "slave_ticket": 13511869,
+      "symbol_a": "xauusd.std",
+      "symbol_b": "xauusd.std",
+      "master_type": "SELL",
+      "slave_type": "BUY",
+      "master_lot": 0.1,
+      "slave_lot": 0.11,
+      "open_time": null,
+      "status": "OPEN"
+    }
+  }
+}

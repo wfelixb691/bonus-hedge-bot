@@ -1,0 +1,5 @@
+MetaTrader5>=5.0.45; platform_system == "Windows"
+rich>=13.7.0
+colorama>=0.4.6
+pydantic>=2.0.0
+pytest>=8.0.0

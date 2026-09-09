@@ -1,0 +1,10 @@
+{
+  "name": "dual-mt5-cloud-web-dashboard",
+  "version": "1.0.0",
+  "description": "Real-time Cloud Web Dashboard for Dual-MT5 Bonus Hedging Bot",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Dual-MT5 Bonus Hedging Live Monitor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --green: #16a34a;
+      --red: #dc2626;
+      --gold: #d97706;
+      --blue: #2563eb;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text-main); padding: 12px; display: flex; justify-content: center; min-height: 100vh; }
+    .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 10px; }
+
+    /* Account Selection & Status Bar */
+    .top-client-bar { display: flex; justify-content: space-between; align-items: center; background: #ffffff; border: 1px solid var(--card-border); border-radius: 12px; padding: 8px 12px; }
+    .client-select { border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 700; background: #f8fafc; color: var(--text-main); outline: none; }
+    .live-status { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.5s infinite; }
+    .offline-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* Top Column Headers */
+    .header-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: center; font-size: 13px; font-weight: 800; color: #64748b; letter-spacing: 0.5px; padding: 4px 0; }
+    
+    /* 2-Column Metric Grid */
+    .grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .metric-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; justify-content: center; min-height: 62px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+    .m-label { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+    .m-val { font-size: 15px; font-weight: 800; color: var(--text-main); font-family: 'Inter', sans-serif; }
+    .m-sub { font-size: 11px; font-weight: 500; color: var(--text-muted); margin-top: 1px; }
+    .m-sub-status { font-size: 11px; font-weight: 600; color: #d97706; display: flex; align-items: center; gap: 4px; }
+
+    /* Detail Posisi Header */
+    .positions-header { font-size: 12px; font-weight: 800; color: #64748b; letter-spacing: 0.5px; margin-top: 6px; padding: 0 2px; display: flex; justify-content: space-between; align-items: center; }
+    
+    /* Position Cards */
+    .pos-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+    .pos-tickets { font-size: 13px; font-weight: 700; color: #0f172a; }
+    .pos-legs { font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; color: var(--text-muted); }
+    .leg-m-val { font-weight: 700; }
+    .leg-s-val { font-weight: 700; }
+    .pos-net-row { text-align: right; font-size: 14px; font-weight: 800; margin-top: 2px; }
+    
+    .green-text { color: var(--green); }
+    .red-text { color: var(--red); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    
+    <!-- Top Account Selection / Status -->
+    <div class="top-client-bar">
+      <select id="acc-select" class="client-select" onchange="changeAccount(this.value)">
+        <option value="">Pilih Akun MT5...</option>
+      </select>
+      <div class="live-status">
+        <div id="status-dot" class="live-dot"></div>
+        <span id="status-text" style="color: var(--green);">ONLINE</span>
+      </div>
+    </div>
+
+    <!-- Column Titles -->
+    <div class="header-cols">
+      <div>MASTER</div>
+      <div>SLAVE</div>
+    </div>
+
+    <!-- Row 1: Rate -->
+    <div class="grid-row">
+      <div class="metric-card">
+        <div class="m-label">Rate</div>
+        <div class="m-val" id="m-rate">17.745</div>
+        <div class="m-sub-status">↻ berjalan</div>
+      </div>
+      <div class="metric-card">
+        <div class="m-label">Rate</div>
+        <div class="m-val" id="s-rate">17.745</div>
+        <div class="m-sub-status">↻ berjalan</div>
+      </div>
+    </div>
+
+    <!-- Row 2: Bid/Ask -->
+    <div class="grid-row">
+      <div class="metric-card">
+        <div class="m-label">Bid/Ask</div>
+        <div class="m-val" id="m-bidask">4579.07/4579.35</div>
+      </div>
+      <div class="metric-card">
+        <div class="m-label">Bid/Ask</div>
+        <div class="m-val" id="s-bidask">4579.07/4579.35</div>
+      </div>
+    </div>
+
+    <!-- Row 3: Equity -->
+    <div class="grid-row">
+      <div class="metric-card">
+        <div class="m-label">Equity</div>
+        <div class="m-val" id="m-equity">$0.00</div>
+        <div class="m-sub" id="m-bal-cr">Bal 0,00 · Cr 0,00</div>
+      </div>
+      <div class="metric-card">
+        <div class="m-label">Equity</div>
+        <div class="m-val" id="s-equity">$0.00</div>
+        <div class="m-sub" id="s-bal-cr">Bal 0,00 · Cr 0,00</div>
+      </div>
+    </div>
+
+    <!-- Row 4: MC (Margin Call Price) -->
+    <div class="grid-row">
+      <div class="metric-card">
+        <div class="m-label">MC</div>
+        <div class="m-val" style="color: #d97706;" id="m-mc">@0.00</div>
+        <div class="m-sub" id="m-mc-pips">+0.0 pips</div>
+      </div>
+      <div class="metric-card">
+        <div class="m-label">MC</div>
+        <div class="m-val" style="color: #d97706;" id="s-mc">@0.00</div>
+        <div class="m-sub" id="s-mc-pips">-0.0 pips</div>
+      </div>
+    </div>
+
+    <!-- Row 5: Margin Level -->
+    <div class="grid-row">
+      <div class="metric-card">
+        <div class="m-label">Margin Level</div>
+        <div class="m-val" id="m-margin-level">0.00%</div>
+      </div>
+      <div class="metric-card">
+        <div class="m-label">Margin Level</div>
+        <div class="m-val" id="s-margin-level">0.00%</div>
+      </div>
+    </div>
+
+    <!-- Positions Section Header -->
+    <div class="positions-header">
+      <span>DETAIL POSISI (<span id="pair-count">0</span>) · POS M/S: <span id="pos-ms">0/0</span></span>
+      <span>▼</span>
+    </div>
+
+    <!-- Position Cards List -->
+    <div id="positions-list" style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 25px;">
+        Menunggu data dari MT5...
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const USD_RATE = 17745;
+    let currentLogin = new URLSearchParams(window.location.search).get('login') || '';
+
+    function formatNumber(num) {
+      return (num || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatRupiah(num) {
+      return 'Rp' + Math.round(num || 0).toLocaleString('id-ID');
+    }
+
+    async function loadAccounts() {
+      try {
+        const res = await fetch('/api/accounts');
+        const data = await res.json();
+        const select = document.getElementById('acc-select');
+        const accs = data.accounts || [];
+
+        if (accs.length === 0) {
+          select.innerHTML = '<option value="">Belum ada akun MT5 aktif</option>';
+          return;
+        }
+
+        select.innerHTML = accs.map(a => 
+          `<option value="${a.login}" ${a.login == currentLogin ? 'selected' : ''}>Akun #${a.login} (${a.is_online ? '🟢 Live' : '⚪ Offline'})</option>`
+        ).join('');
+
+        if (!currentLogin && accs.length > 0) {
+          currentLogin = accs[0].login;
+          select.value = currentLogin;
+        }
+      } catch (e) {
+        console.error("Failed to load accounts:", e);
+      }
+    }
+
+    function changeAccount(login) {
+      currentLogin = login;
+      window.history.replaceState(null, '', `?login=${login}`);
+      fetchDashboard();
+    }
+
+    async function fetchDashboard() {
+      if (!currentLogin) return;
+      try {
+        const res = await fetch(`/api/status/${currentLogin}`);
+        if (!res.ok) {
+          document.getElementById('status-dot').className = 'offline-dot';
+          document.getElementById('status-text').textContent = 'OFFLINE';
+          document.getElementById('status-text').style.color = 'var(--red)';
+          return;
+        }
+
+        const d = await res.json();
+        const isOnline = d.is_online;
+        document.getElementById('status-dot').className = isOnline ? 'live-dot' : 'offline-dot';
+        document.getElementById('status-text').textContent = isOnline ? 'ONLINE' : 'STANDBY';
+        document.getElementById('status-text').style.color = isOnline ? 'var(--green)' : 'var(--red)';
+
+        const m = d.master || {};
+        const s = d.slave || {};
+        const pairs = d.pairs || [];
+
+        // Master Equity & Balance
+        document.getElementById('m-equity').textContent = '$' + formatNumber(m.equity);
+        document.getElementById('m-bal-cr').textContent = `Bal ${formatNumber(m.balance)} · Cr 0,00`;
+        document.getElementById('m-margin-level').textContent = (m.margin_level || 0).toFixed(2) + '%';
+
+        // Slave Equity & Balance & Credit
+        document.getElementById('s-equity').textContent = '$' + formatNumber(s.equity);
+        const crVal = (s.equity && s.balance && s.equity > s.balance) ? (s.equity - s.balance) : (s.balance ? s.balance * 0.20 : 0);
+        document.getElementById('s-bal-cr').textContent = `Bal ${formatNumber(s.balance)} · Cr ${formatNumber(crVal)}`;
+        document.getElementById('s-margin-level').textContent = (s.margin_level || 0).toFixed(2) + '%';
+
+        // Bid / Ask
+        if (pairs.length > 0) {
+          const p0 = pairs[0];
+          document.getElementById('m-bidask').textContent = `${(p0.master_price||0).toFixed(2)}/${((p0.master_price||0)+0.28).toFixed(2)}`;
+          document.getElementById('s-bidask').textContent = `${(p0.slave_price||0).toFixed(2)}/${((p0.slave_price||0)+0.28).toFixed(2)}`;
+        }
+
+        // MC Calculation
+        const mFree = m.free_margin || 0;
+        const sFree = s.free_margin || 0;
+        const mLot = pairs.reduce((sum, p) => sum + (p.master_vol || 0), 0);
+        const sLot = pairs.reduce((sum, p) => sum + (p.slave_vol || 0), 0);
+
+        if (mLot > 0) {
+          const mDist = (mFree / (mLot * 100));
+          const mMCPrice = (pairs[0].master_price || 4600) + mDist;
+          document.getElementById('m-mc').textContent = `@${mMCPrice.toFixed(2)}`;
+          document.getElementById('m-mc-pips').textContent = `+${(mDist * 10).toFixed(1)} pips`;
+        }
+        if (sLot > 0) {
+          const sDist = (sFree / (sLot * 100));
+          const sMCPrice = (pairs[0].slave_price || 4600) - sDist;
+          document.getElementById('s-mc').textContent = `@${sMCPrice.toFixed(2)}`;
+          document.getElementById('s-mc-pips').textContent = `-${(sDist * 10).toFixed(1)} pips`;
+        }
+
+        // Header Counts
+        document.getElementById('pair-count').textContent = pairs.length;
+        document.getElementById('pos-ms').textContent = `${m.count || 0}/${s.count || 0}`;
+
+        // Render Positions List
+        const listEl = document.getElementById('positions-list');
+        if (pairs.length === 0) {
+          listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 25px;">Menunggu posisi aktif...</div>';
+        } else {
+          listEl.innerHTML = pairs.map(p => {
+            const mProf = p.master_profit || 0;
+            const sProf = p.slave_profit || 0;
+            const netProf = p.net_profit || 0;
+
+            const mSign = mProf >= 0 ? '+' : '';
+            const sSign = sProf >= 0 ? '+' : '';
+            const netSign = netProf >= 0 ? '+' : '-';
+
+            const mColor = mProf >= 0 ? 'green-text' : 'red-text';
+            const sColor = sProf >= 0 ? 'green-text' : 'red-text';
+            const netColor = netProf >= 0 ? 'green-text' : 'red-text';
+
+            const mRp = formatRupiah(mProf * USD_RATE);
+            const sRp = formatRupiah(sProf * USD_RATE);
+            const netRp = formatRupiah(Math.abs(netProf) * USD_RATE);
+
+            return `
+              <div class="pos-card">
+                <div class="pos-tickets">
+                  #${p.master_ticket} S ${p.master_vol}@${p.master_price} ⇄ #${p.slave_ticket} B ${p.slave_vol}@${p.slave_price}
+                </div>
+                <div class="pos-legs">
+                  <span>M <span class="${mColor}">${mSign}$${formatNumber(Math.abs(mProf))}</span> <span style="font-size:11px;">≈${mRp}</span></span>
+                  <span>S <span class="${sColor}">${sSign}$${formatNumber(Math.abs(sProf))}</span> <span style="font-size:11px;">≈${sRp}</span></span>
+                </div>
+                <div class="pos-net-row ${netColor}">
+                  ${netSign}$${formatNumber(Math.abs(netProf))} <span style="font-size:12px; font-weight:700;">≈${netSign}${netRp}</span>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      } catch (e) {
+        console.error("Fetch dashboard error:", e);
+      }
+    }
+
+    loadAccounts();
+    setInterval(loadAccounts, 5000);
+    setInterval(fetchDashboard, 1000);
+  </script>
+</body>
+</html>

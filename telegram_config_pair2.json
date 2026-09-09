@@ -1,0 +1,13 @@
+{
+  "telegram_bot_token": "8841891391:AAFZX-wQSRd2oXOq5Qw52mWAkq_MPxO72_0",
+  "telegram_chat_id": "164419860",
+  "initial_deposit_master": 1000.0,
+  "initial_deposit_slave": 1000.0,
+  "initial_total_capital": 2000.0,
+  "enable_high_watermark_protection": true,
+  "periodic_report_interval_minutes": 60,
+  "send_on_order_open": true,
+  "send_on_cycle_close": true,
+  "enable_profit_sharing": true,
+  "profit_sharing_percentage": 30.0
+}

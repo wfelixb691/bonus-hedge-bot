@@ -1,0 +1,5 @@
+*.dat
+*.log
+*.ini
+.DS_Store
+*.bak

@@ -1,0 +1,2304 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NOVA HEDGE // Dual-Quant Trading OS & Client Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0b0e17;
+      --bg-surface: #131929;
+      --bg-card: #1a2238;
+      --bg-card-sub: #111726;
+      --primary-blue: #3b82f6;
+      --primary-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+      --moon-gold: #f59e0b;
+      --moon-gold-gradient: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+      --profit-green: #10b981;
+      --loss-red: #ef4444;
+      --text-white: #ffffff;
+      --text-soft: #cbd5e1;
+      --text-muted: #8492a6;
+      --text-dim: #475569;
+      --border-line: rgba(255, 255, 255, 0.08);
+      --radius-sm: 12px;
+      --radius-md: 18px;
+      --radius-lg: 24px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg-dark);
+      color: var(--text-white);
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background: #0b0e17;
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    /* Auth Views */
+    .auth-view {
+      display: none;
+      flex-direction: column;
+      padding: 30px 20px;
+      gap: 20px;
+      justify-content: center;
+      min-height: 100vh;
+      animation: fadeIn 0.25s ease-out;
+    }
+    .auth-view.active { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .live-pulse-badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      animation: pulseGreen 1.6s infinite;
+    }
+    @keyframes pulseGreen {
+      0% { opacity: 0.7; }
+      50% { opacity: 1; text-shadow: 0 0 8px rgba(74, 222, 128, 0.6); }
+      100% { opacity: 0.7; }
+    }
+
+    .auth-brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .auth-logo {
+      width: 56px;
+      height: 56px;
+      background: var(--primary-gradient);
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4);
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-input {
+      background: #131929;
+      border: 1px solid var(--border-line);
+      border-radius: var(--radius-sm);
+      padding: 13px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus { border-color: var(--primary-blue); box-shadow: 0 0 12px rgba(59, 130, 246, 0.25); }
+
+    .btn-main {
+      background: var(--primary-gradient);
+      color: #ffffff;
+      font-weight: 800;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+      transition: all 0.2s;
+    }
+    .btn-main:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4); }
+
+    .btn-gold {
+      background: var(--moon-gold-gradient);
+      color: #000;
+      font-weight: 800;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 12px 18px;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-sub {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-line);
+      color: var(--text-soft);
+      font-weight: 700;
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    /* Dashboard Shell */
+    #dashboard-view { display: none; flex-direction: column; width: 100%; }
+    #dashboard-view.active { display: flex; }
+
+    .readonly-banner {
+      display: none;
+      background: linear-gradient(135deg, #78350f 0%, #b45309 100%);
+      color: #fff;
+      padding: 10px 16px;
+      font-size: 11px;
+      font-weight: 700;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 60;
+    }
+    .readonly-banner.show { display: flex; }
+
+    .app-header {
+      background: rgba(19, 25, 41, 0.95);
+      backdrop-filter: blur(15px);
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      border-bottom: 1px solid var(--border-line);
+    }
+    .user-profile-header { display: flex; align-items: center; gap: 10px; }
+    .user-avatar {
+      width: 38px;
+      height: 38px;
+      background: var(--moon-gold-gradient);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 900;
+      color: #000;
+    }
+    .user-name-title { font-size: 14px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+    .rank-tag-v {
+      font-size: 10px;
+      font-weight: 900;
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--moon-gold);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      padding: 2px 7px;
+      border-radius: 12px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .header-fuel-badge {
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #60a5fa;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+
+    .app-content { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .tab-section { display: none; flex-direction: column; gap: 16px; }
+    .tab-section.active { display: flex; animation: fadeIn 0.2s ease-out; }
+
+    /* Quick 4-Grid Menu */
+    .quick-actions-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-line);
+      border-radius: var(--radius-md);
+      padding: 14px 10px;
+    }
+    .action-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      color: var(--text-soft);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .action-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .c-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .c-gold { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+    .c-green { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .c-purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+
+    /* Hero Banner Card */
+    .hero-banner-card {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    }
+    .banner-sub { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+    .banner-val { font-size: 32px; font-weight: 900; font-family: 'JetBrains Mono', monospace; color: #ffffff; }
+
+    /* Bot Card */
+    .bot-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-line);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .bot-top { display: flex; justify-content: space-between; align-items: center; }
+    .bot-pair-title { font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+    .bot-status-tag { font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 20px; letter-spacing: 0.5px; }
+    .st-running { background: rgba(16, 185, 129, 0.15); color: var(--profit-green); border: 1px solid rgba(16, 185, 129, 0.3); }
+
+    /* Revenue Day Card */
+    .revenue-item {
+      background: var(--bg-card-sub);
+      border: 1px solid var(--border-line);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Rank Card */
+    .rank-card {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(217, 119, 6, 0.05) 100%);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: var(--radius-md);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .rank-bar { height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden; }
+    .rank-fill { height: 100%; background: var(--moon-gold-gradient); border-radius: 4px; }
+
+    /* Account Section Box in Binding Modal */
+    .account-bind-section {
+      background: #0b0e17;
+      border: 1px solid var(--border-line);
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Bottom App Navigation */
+    .app-bottom-nav {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      max-width: 480px;
+      background: rgba(19, 25, 41, 0.98);
+      border-top: 1px solid var(--border-line);
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      padding: 6px 0;
+      z-index: 50;
+      backdrop-filter: blur(15px);
+    }
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 4px 0;
+      transition: all 0.2s;
+    }
+    .nav-link.active { color: var(--primary-blue); }
+    .nav-link-icon { font-size: 19px; }
+
+    /* Modal Sheet */
+    .modal-box {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+    }
+    .modal-box.open { display: flex; }
+    .modal-sheet {
+      background: #131929;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 440px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .green-text { color: var(--profit-green); }
+    .gold-text { color: var(--moon-gold); }
+    .blue-text { color: #60a5fa; }
+    .red-text { color: var(--loss-red); }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- ========================================================== -->
+    <!-- 1. SCREEN: LOGIN                                           -->
+    <!-- ========================================================== -->
+    <div id="screen-login" class="auth-view active">
+      <div class="auth-brand">
+        <div class="auth-logo" style="background:linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);">🛡️</div>
+        <h1 style="font-size:22px; font-weight:900; letter-spacing:0.5px;">NOVA HEDGE // QUANT OS</h1>
+        <p style="font-size:12px; color:var(--text-muted);">Sistem Trading Kuantitatif Dual-Hedge & Portal Klien</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">User ID / Alamat Email</label>
+        <input type="text" id="login-id" class="form-input" placeholder="User ID atau email Anda" value="admin">
+      </div>
+
+      <div class="form-group">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <label class="form-label">Password</label>
+          <span style="font-size:11px; color:var(--primary-blue); cursor:pointer; font-weight:700;" onclick="showAuthScreen('screen-forgot')">Lupa Password?</span>
+        </div>
+        <input type="password" id="login-pass" class="form-input" placeholder="••••••••" value="admin123">
+      </div>
+
+      <button class="btn-main" onclick="handleLogin()">Masuk ke Dashboard</button>
+
+      <div style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:12px; padding:12px; font-size:11px; color:var(--text-soft); line-height:1.4;">
+        💡 <b>Info Akses:</b> Username <b>admin</b> · Password <b>admin123</b><br>
+        👁️ <b>Mode Presentasi (Read-Only):</b> Username <b>admin</b> · Password <b>demo123456</b>
+      </div>
+
+      <div style="text-align:center; font-size:13px; color:var(--text-muted); margin-top:6px;">
+        Belum punya akun? <b style="color:var(--moon-gold); cursor:pointer;" onclick="showAuthScreen('screen-register')">Daftar Sekarang ›</b>
+      </div>
+    </div>
+
+
+    <!-- ========================================================== -->
+    <!-- 2. SCREEN: REGISTER                                        -->
+    <!-- ========================================================== -->
+    <div id="screen-register" class="auth-view">
+      <div class="auth-brand">
+        <div class="auth-logo" style="background:var(--moon-gold-gradient); color:#000;">➕</div>
+        <h1 style="font-size:20px; font-weight:900;">Pendaftaran Akun Baru</h1>
+        <p style="font-size:12px; color:var(--text-muted);">Mulai trading kuantitatif otomatis dengan akun MT5 Anda sendiri</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nama Lengkap</label>
+        <input type="text" id="reg-name" class="form-input" placeholder="Nama sesuai identitas">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Alamat Email (Wajib untuk Reset Password)</label>
+        <input type="email" id="reg-email" class="form-input" placeholder="nama@gmail.com">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nomor WhatsApp (Aktif)</label>
+        <input type="text" id="reg-phone" class="form-input" placeholder="+62 812-xxxx-xxxx">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Username / User ID Unik</label>
+        <input type="text" id="reg-userid" class="form-input" placeholder="Contoh: hendra88">
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="reg-pass" class="form-input" placeholder="min. 6 karakter">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ulangi Password</label>
+          <input type="password" id="reg-pass-confirm" class="form-input" placeholder="••••••••">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Kode Referral Sponsor</label>
+        <input type="text" id="reg-sponsor" class="form-input" value="ADMIN888" style="color:var(--moon-gold); font-weight:800; font-family:'JetBrains Mono';">
+      </div>
+
+      <button class="btn-main" onclick="handleRegister()">Buat Akun Sekarang</button>
+
+      <div style="text-align:center; font-size:13px; color:var(--text-muted);">
+        Sudah punya akun? <b style="color:var(--primary-blue); cursor:pointer;" onclick="showAuthScreen('screen-login')">Masuk di sini ›</b>
+      </div>
+    </div>
+
+
+    <!-- ========================================================== -->
+    <!-- 3. SCREEN: RESET PASSWORD VIA EMAIL                        -->
+    <!-- ========================================================== -->
+    <div id="screen-forgot" class="auth-view">
+      <div class="auth-brand">
+        <div class="auth-logo" style="background:#1e293b;">🔑</div>
+        <h1 style="font-size:20px; font-weight:900;">Reset Password</h1>
+        <p style="font-size:12px; color:var(--text-muted);">Kami akan mengirim kode verifikasi ke email Anda</p>
+      </div>
+
+      <div id="forgot-step-1" style="display:flex; flex-direction:column; gap:16px;">
+        <div class="form-group">
+          <label class="form-label">Alamat Email Terdaftar</label>
+          <input type="email" id="forgot-email" class="form-input" placeholder="nama@gmail.com" value="mahar.indra@gmail.com">
+        </div>
+        <button class="btn-main" onclick="requestResetOTP()">Kirim Kode Verifikasi Email</button>
+      </div>
+
+      <div id="forgot-step-2" style="display:none; flex-direction:column; gap:16px;">
+        <div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); padding:12px; border-radius:12px; font-size:12px; color:var(--profit-green);" id="otp-alert-box">
+          ✓ Kode OTP telah dikirim ke email Anda.
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Kode Verifikasi OTP (6 Angka)</label>
+          <input type="text" id="reset-otp" class="form-input" placeholder="Misal: 489201" style="font-family:'JetBrains Mono'; letter-spacing:3px; text-align:center; font-size:18px;">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password Baru</label>
+          <input type="password" id="reset-new-pass" class="form-input" placeholder="min. 6 karakter">
+        </div>
+
+        <button class="btn-main" onclick="submitNewPassword()">Simpan Password Baru</button>
+      </div>
+
+      <div style="text-align:center; font-size:13px; color:var(--text-muted); margin-top:10px;">
+        Ingat password Anda? <b style="color:var(--primary-blue); cursor:pointer;" onclick="showAuthScreen('screen-login')">Kembali ke Login ›</b>
+      </div>
+    </div>
+
+
+    <!-- ========================================================== -->
+    <!-- 4. DASHBOARD UTAMA (SETELAH LOGIN)                         -->
+    <!-- ========================================================== -->
+    <div id="dashboard-view">
+      
+      <!-- Read-Only Banner -->
+      <div id="readonly-notice" class="readonly-banner">
+        <span>👁️ <b>MODE PRESENTASI (READ-ONLY) AKTIF:</b> Anda sedang melihat data demo. Fitur transaksi dinonaktifkan.</span>
+        <button onclick="handleLogout()" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.3); color:#fff; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">Keluar</button>
+      </div>
+
+      <!-- Top App Header -->
+      <header class="app-header">
+        <div class="user-profile-header">
+          <div class="user-avatar" id="d-avatar">MI</div>
+          <div>
+            <div class="user-name-title">
+              <span id="d-name">Mahar Indra</span>
+              <span class="rank-tag-v" id="d-rank">V1 PARTNER</span>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted);">UID: <span id="d-userid">maharindra</span></div>
+          </div>
+        </div>
+        <div class="header-fuel-badge" onclick="triggerAction('openModal', 'modal-fuel-topup')">
+          <span>⚡ Fuel:</span>
+          <b id="d-fuel-val">64.50 USDT</b>
+        </div>
+      </header>
+
+      <!-- App Main Content -->
+      <main class="app-content">
+
+        <!-- TAB 1: BERANDA -->
+        <section id="tab-home" class="tab-section active">
+          <!-- Hero Total Profit Card -->
+          <div class="hero-banner-card">
+            <div class="banner-sub">Akumulasi Profit Bersih Trading</div>
+            <div class="banner-val green-text" id="home-profit-val">+672.35 USDT</div>
+            <div style="font-size:12px; color:var(--text-soft);" id="home-mt5-status">Net 70% Hak Investor Terkumpul</div>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; background:rgba(0,0,0,0.3); padding:10px 14px; border-radius:12px; margin-top:4px;">
+              <div>
+                <div style="font-size:10px; color:var(--text-muted);">MODAL DEPOSIT MT5</div>
+                <div style="font-size:14px; font-weight:800; font-family:'JetBrains Mono';" id="home-dep-val">3,000.00 USDT</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:10px; color:var(--text-muted);">REBATE IB (10 USDT/LOT)</div>
+                <div class="gold-text" style="font-size:14px; font-weight:800; font-family:'JetBrains Mono';">+184.00 USDT</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4-Grid Quick Actions Menu -->
+          <div class="quick-actions-bar">
+            <div class="action-item" onclick="triggerAction('openModal', 'modal-bind-mt5')">
+              <div class="action-circle c-blue">🔗</div>
+              <span>Bind MT5</span>
+            </div>
+            <div class="action-item" onclick="switchTab('tab-revenue', document.querySelectorAll('.nav-link')[2])">
+              <div class="action-circle c-green">📊</div>
+              <span>Revenue</span>
+            </div>
+            <div class="action-item" onclick="triggerAction('openModal', 'modal-fuel-topup')">
+              <div class="action-circle c-gold">⚡</div>
+              <span>Fuel Gas</span>
+            </div>
+            <div class="action-item" onclick="switchTab('tab-team', document.querySelectorAll('.nav-link')[3])">
+              <div class="action-circle c-purple">👥</div>
+              <span>Invite Tim</span>
+            </div>
+          </div>
+
+          <!-- Live Strategy Card -->
+          <div class="bot-card">
+            <div class="bot-top">
+              <div class="bot-pair-title">XAUUSD (Gold Dual-Hedge)</div>
+              <span class="bot-status-tag st-running">STRATEGY RUNNING</span>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; background:var(--bg-card-sub); padding:12px; border-radius:12px;">
+              <div>
+                <div style="font-size:10px; color:var(--text-muted);">MASTER STP (#100870)</div>
+                <div style="font-size:13px; font-weight:800; font-family:'JetBrains Mono';">3,420.50 USDT</div>
+                <div class="green-text" style="font-size:10px; font-weight:700;">Margin Level: 685.2%</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:10px; color:var(--text-muted);">SLAVE BONUS (#100871)</div>
+                <div style="font-size:13px; font-weight:800; font-family:'JetBrains Mono';">2,950.00 USDT</div>
+                <div class="gold-text" style="font-size:10px; font-weight:700;">Margin Level: 198.4%</div>
+              </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span>Floating Gabungan: <b class="green-text">+14.50 USDT</b></span>
+              <span>Target Basket TP: <b class="gold-text">31.74 USDT</b></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 2: LIVE DUAL-MT5 MONITOR & POSITIONS -->
+        <section id="tab-strategy" class="tab-section">
+          <!-- Top Header -->
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <h2 style="font-size:16px; font-weight:900; margin:0;">⚡ Live MT5 Terminal</h2>
+                <span class="live-pulse-badge">● LIVE 50ms</span>
+              </div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+                XAUUSD Hedging: Master #<span id="live-master-login">100870</span> ⇄ Slave #<span id="live-slave-login">100871</span>
+              </div>
+            </div>
+            <button class="btn-gold" style="padding:6px 12px; font-size:11px; border-radius:8px;" onclick="fetchLiveMT5(true)">🔄 Sync MT5</button>
+          </div>
+
+          <!-- Hero: Combined Net Floating & Target TP -->
+          <div class="hero-banner-card" style="padding:16px; border:1px solid rgba(255,255,255,0.1); background:linear-gradient(135deg, rgba(17,24,39,0.95), rgba(30,58,138,0.4));">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div class="banner-sub" style="letter-spacing:0.5px; font-weight:700;">TOTAL NET FLOATING GABUNGAN</div>
+              <span id="live-engine-tag" style="font-size:10px; font-weight:800; padding:2px 8px; border-radius:6px; background:rgba(34,197,94,0.15); color:#4ade80;">🟢 ACTIVE HEDGING</span>
+            </div>
+            
+            <div style="display:flex; align-items:baseline; gap:8px; margin:8px 0;">
+              <div id="live-total-net" style="font-size:30px; font-weight:900; font-family:'JetBrains Mono'; color:#4ade80;">+$14.50</div>
+              <div id="live-total-net-idr" style="font-size:14px; font-weight:700; color:rgba(255,255,255,0.6);">(Rp +232.000)</div>
+            </div>
+
+            <div style="background:rgba(0,0,0,0.35); padding:10px 12px; border-radius:10px; margin-top:10px;">
+              <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;">
+                <span style="color:var(--text-muted);">Target Basket TP Siklus Ini:</span>
+                <span style="font-weight:800; color:var(--moon-gold); font-family:'JetBrains Mono';" id="live-target-tp">+$67.61 USD (Rp 1.081.760)</span>
+              </div>
+              <div style="width:100%; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                <div id="live-tp-progress" style="width:45%; height:100%; background:linear-gradient(90deg, #3b82f6, #22c55e); transition:width 0.5s;"></div>
+              </div>
+              <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:4px;">
+                <span>Proteksi Spread Buffer: <b>$20.00 Ter-Cover</b></span>
+                <span id="live-tp-pct">45% Menuju TP</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Master vs Slave Account Balance & Margin Level -->
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;">
+            <!-- Master Account Box -->
+            <div style="background:var(--bg-card); border:1px solid rgba(96,165,250,0.3); padding:12px; border-radius:12px;">
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                <span style="font-size:14px;">👑</span>
+                <div>
+                  <div style="font-size:11px; font-weight:800; color:#93c5fd;">MASTER STP</div>
+                  <div style="font-size:10px; color:var(--text-muted);">#<span id="card-master-login">100870</span> · SELL Engine</div>
+                </div>
+              </div>
+              <div style="font-size:11px; color:var(--text-muted);">Saldo: <b style="color:#fff; font-family:'JetBrains Mono';" id="card-master-bal">$1,500.00</b></div>
+              <div style="font-size:11px; color:var(--text-muted);">Equity: <b style="color:#fff; font-family:'JetBrains Mono';" id="card-master-eq">$1,217.55</b></div>
+              <div style="font-size:11px; margin-top:4px;">Floating: <b id="card-master-prof" style="color:#f87171; font-family:'JetBrains Mono';">-$282.45</b></div>
+              <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.06); font-size:10px; color:var(--text-muted);">
+                Margin Level: <b id="card-master-ml" style="color:#4ade80;">540.2%</b><br>
+                Free Margin: <b id="card-master-free" style="color:#fff;">$1,100.20</b>
+              </div>
+            </div>
+
+            <!-- Slave Account Box -->
+            <div style="background:var(--bg-card); border:1px solid rgba(251,191,36,0.3); padding:12px; border-radius:12px;">
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                <span style="font-size:14px;">🛡️</span>
+                <div>
+                  <div style="font-size:11px; font-weight:800; color:var(--moon-gold);">SLAVE BONUS</div>
+                  <div style="font-size:10px; color:var(--text-muted);">#<span id="card-slave-login">100871</span> · BUY +20% LP</div>
+                </div>
+              </div>
+              <div style="font-size:11px; color:var(--text-muted);">Saldo: <b style="color:#fff; font-family:'JetBrains Mono';" id="card-slave-bal">$1,500.00</b></div>
+              <div style="font-size:11px; color:var(--text-muted);">Equity: <b style="color:#fff; font-family:'JetBrains Mono';" id="card-slave-eq">$1,746.33</b></div>
+              <div style="font-size:11px; margin-top:4px;">Floating: <b id="card-slave-prof" style="color:#4ade80; font-family:'JetBrains Mono';">+$246.33</b></div>
+              <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.06); font-size:10px; color:var(--text-muted);">
+                Bonus Kredit: <b id="card-slave-credit" style="color:var(--moon-gold);">+$300.00 USD</b><br>
+                Margin Level: <b id="card-slave-ml" style="color:#4ade80;">610.5%</b>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Live Positions Matrix -->
+          <div style="margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div style="font-size:13px; font-weight:900; color:#fff; display:flex; align-items:center; gap:6px;">
+                <span>📋 POSISI HEDGE AKTIF (PERSIS MT5)</span>
+                <span id="live-layer-badge" style="font-size:10px; background:rgba(59,130,246,0.2); color:#60a5fa; padding:1px 6px; border-radius:4px; font-weight:800;">2 Pasang Terbuka</span>
+              </div>
+              <span style="font-size:11px; color:var(--text-muted);">Rate: Rp 16.000/USD</span>
+            </div>
+
+            <!-- Dynamic Positions List Container -->
+            <div id="live-positions-container" style="display:flex; flex-direction:column; gap:10px;">
+              <!-- Dynamic pairs rendered via JavaScript -->
+            </div>
+          </div>
+
+          <!-- Strategy Config Parameters Strip -->
+          <div style="margin-top:16px; background:var(--bg-card-sub); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:11px; font-weight:800; color:var(--text-muted); margin-bottom:8px;">PARAMETER PENGAMANAN ALGO TRADING</div>
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; font-size:10px; text-align:center;">
+              <div>
+                <div style="color:var(--text-muted);">Base Lot</div>
+                <div style="font-weight:800; font-family:'JetBrains Mono'; color:#fff;" id="param-base-lot">0.15 Lot</div>
+              </div>
+              <div>
+                <div style="color:var(--text-muted);">Slave Mult</div>
+                <div style="font-weight:800; font-family:'JetBrains Mono'; color:var(--moon-gold);">1.10x</div>
+              </div>
+              <div>
+                <div style="color:var(--text-muted);">Delta Net</div>
+                <div style="font-weight:800; font-family:'JetBrains Mono'; color:#4ade80;">+0.02 Lot</div>
+              </div>
+              <div>
+                <div style="color:var(--text-muted);">Grid Step</div>
+                <div style="font-weight:800; font-family:'JetBrains Mono'; color:#fff;">$20.00 Gold</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 3: REVENUE -->
+        <section id="tab-revenue" class="tab-section">
+          <!-- Summary Banner -->
+          <div class="hero-banner-card" style="padding:16px;">
+            <div class="banner-sub">Total Revenue Kumulatif (Gross)</div>
+            <div class="banner-val green-text">+960.50 USDT</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; background:rgba(0,0,0,0.3); padding:10px; border-radius:12px; margin-top:6px;">
+              <div>
+                <div style="font-size:10px; color:var(--text-muted);">HAK INVESTOR (70%)</div>
+                <div class="green-text" style="font-size:13px; font-weight:800; font-family:'JetBrains Mono';">+672.35 USDT</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:10px; color:var(--text-muted);">FEE PENGELOLA (30%)</div>
+                <div class="gold-text" style="font-size:13px; font-weight:800; font-family:'JetBrains Mono';">+288.15 USDT</div>
+              </div>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); display:flex; justify-content:space-between; margin-top:2px;">
+              <span>Total Volume Lot: <b>18.4 Lot</b></span>
+              <span>Total Rebate IB: <b class="gold-text">+184.00 USDT</b></span>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-size:13px; font-weight:800; color:var(--text-muted);">RIWAYAT PROFIT HARIAN</div>
+            <span style="font-size:11px; color:var(--primary-blue); font-weight:700;">Klik baris untuk rincian</span>
+          </div>
+
+          <!-- Interactive Revenue List -->
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            
+            <!-- Day 1 -->
+            <div class="revenue-item" style="cursor:pointer; transition:transform 0.2s;" onclick="showRevenueDetail('01 Sep 2026', '31.74', '22.22', '9.52', '12.00', '1.20', '62.50', '-30.76')">
+              <div>
+                <div style="font-size:13px; font-weight:800; display:flex; align-items:center; gap:6px;">
+                  <span>01 Sep 2026</span>
+                  <span style="font-size:9px; background:rgba(59,130,246,0.15); color:#60a5fa; padding:2px 6px; border-radius:6px;">1 Siklus</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-muted);">Volume: 1.20 Lot · Gross: 31.74 USDT</div>
+              </div>
+              <div style="text-align:right;">
+                <div class="green-text" style="font-weight:800; font-size:15px; font-family:'JetBrains Mono';">+22.22 USDT</div>
+                <div style="font-size:10px; color:var(--loss-red);">Fuel Fee: -9.52 USDT ›</div>
+              </div>
+            </div>
+
+            <!-- Day 2 -->
+            <div class="revenue-item" style="cursor:pointer; transition:transform 0.2s;" onclick="showRevenueDetail('31 Agu 2026', '66.94', '46.86', '20.08', '24.00', '2.40', '128.94', '-62.00')">
+              <div>
+                <div style="font-size:13px; font-weight:800; display:flex; align-items:center; gap:6px;">
+                  <span>31 Agu 2026</span>
+                  <span style="font-size:9px; background:rgba(59,130,246,0.15); color:#60a5fa; padding:2px 6px; border-radius:6px;">2 Siklus</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-muted);">Volume: 2.40 Lot · Gross: 66.94 USDT</div>
+              </div>
+              <div style="text-align:right;">
+                <div class="green-text" style="font-weight:800; font-size:15px; font-family:'JetBrains Mono';">+46.86 USDT</div>
+                <div style="font-size:10px; color:var(--loss-red);">Fuel Fee: -20.08 USDT ›</div>
+              </div>
+            </div>
+
+            <!-- Day 3 -->
+            <div class="revenue-item" style="cursor:pointer; transition:transform 0.2s;" onclick="showRevenueDetail('30 Agu 2026', '42.50', '29.75', '12.75', '16.00', '1.60', '84.20', '-41.70')">
+              <div>
+                <div style="font-size:13px; font-weight:800; display:flex; align-items:center; gap:6px;">
+                  <span>30 Agu 2026</span>
+                  <span style="font-size:9px; background:rgba(59,130,246,0.15); color:#60a5fa; padding:2px 6px; border-radius:6px;">1 Siklus</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-muted);">Volume: 1.60 Lot · Gross: 42.50 USDT</div>
+              </div>
+              <div style="text-align:right;">
+                <div class="green-text" style="font-weight:800; font-size:15px; font-family:'JetBrains Mono';">+29.75 USDT</div>
+                <div style="font-size:10px; color:var(--loss-red);">Fuel Fee: -12.75 USDT ›</div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- TAB 4: TEAM -->
+        <section id="tab-team" class="tab-section">
+          <div class="rank-card">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-size:11px; font-weight:800; color:var(--moon-gold);">PERINGKAT ANDA</div>
+                <div style="font-size:20px; font-weight:900; color:#fff;" id="team-rank-val">V1 PARTNER</div>
+              </div>
+              <div class="rank-tag-v" style="font-size:12px; padding:4px 10px;">NEXT: V2</div>
+            </div>
+
+            <div>
+              <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px;">
+                <span>Syarat Naik Rank V2 (3 Direct V1 + 20 Tim)</span>
+                <span class="gold-text">4 / 20 Member</span>
+              </div>
+              <div class="rank-bar"><div class="rank-fill" style="width:20%;"></div></div>
+            </div>
+          </div>
+
+          <div class="bot-card">
+            <div style="font-size:13px; font-weight:800;">UNDANG TEMAN & BANGUN TIM</div>
+            <div style="background:#0b0e17; border:1px dashed var(--moon-gold); border-radius:12px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-size:10px; color:var(--text-muted);">KODE REFERRAL ANDA</div>
+                <div style="font-size:20px; font-weight:900; font-family:'JetBrains Mono'; color:var(--moon-gold);" id="team-ref-code">MOON888</div>
+              </div>
+              <button class="btn-gold" onclick="copyInviteLink()">Salin Link</button>
+            </div>
+            <button class="btn-main" onclick="shareWhatsApp()">📱 Bagikan Undangan ke WhatsApp</button>
+          </div>
+
+          <!-- 3-LEVEL OMZET & NETWORK REPORT (LAPORAN OMZET HASIL REKRUT) -->
+          <div class="hero-banner-card" style="padding:16px;">
+            <div class="banner-sub">Laporan Total Omzet Jaringan (3 Level)</div>
+            <div class="banner-val gold-text">$10,000.00 <span style="font-size:14px; color:#fff;">USDT</span></div>
+            <div style="font-size:11px; color:var(--text-soft); display:flex; justify-content:space-between; margin-top:2px;">
+              <span>Total Member: <b>5 Member Aktif</b></span>
+              <span>Total Komisi Rekrut: <b class="green-text">+384.50 USDT</b></span>
+            </div>
+
+            <!-- 3-Level Omzet Breakdown Grid -->
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; background:rgba(0,0,0,0.4); padding:10px; border-radius:12px; margin-top:6px; text-align:center;">
+              <div>
+                <div style="font-size:9px; color:var(--profit-green); font-weight:800;">LEVEL 1 (DIRECT)</div>
+                <div style="font-size:13px; font-weight:900; font-family:'JetBrains Mono'; color:#fff;">$6,500</div>
+                <div style="font-size:9px; color:var(--text-muted);">3 Member · +$317.00</div>
+              </div>
+              <div style="border-left:1px solid var(--border-line); border-right:1px solid var(--border-line);">
+                <div style="font-size:9px; color:var(--moon-gold); font-weight:800;">LEVEL 2</div>
+                <div style="font-size:13px; font-weight:900; font-family:'JetBrains Mono'; color:#fff;">$2,000</div>
+                <div style="font-size:9px; color:var(--text-muted);">1 Member · +$42.50</div>
+              </div>
+              <div>
+                <div style="font-size:9px; color:#c084fc; font-weight:800;">LEVEL 3</div>
+                <div style="font-size:13px; font-weight:900; font-family:'JetBrains Mono'; color:#fff;">$1,500</div>
+                <div style="font-size:9px; color:var(--text-muted);">1 Member · +$25.00</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Direct & Multi-Tier Downlines Directory (Hasil Referral 3 Level) -->
+          <div class="bot-card">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:14px; font-weight:800;">Daftar Anggota Tim (3 Level)</div>
+              <span style="font-size:11px; color:var(--moon-gold); font-weight:700;">Hasil Rekrut Aktif</span>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              
+              <!-- Level 1 Direct -->
+              <div class="revenue-item" style="border-left:3px solid var(--profit-green);">
+                <div>
+                  <div style="font-size:13px; font-weight:800; display:flex; align-items:center; gap:6px;">
+                    <span>Hermawan Lesmana</span>
+                    <span class="rank-tag-v" style="font-size:9px; background:rgba(16,185,129,0.15); color:var(--profit-green); border-color:rgba(16,185,129,0.3);">LEVEL 1 DIRECT</span>
+                  </div>
+                  <div style="font-size:11px; color:var(--text-muted);">Dep: $3,000 USDT · Traded: 18.4 Lot · Profit: $540</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="green-text" style="font-weight:800; font-family:'JetBrains Mono';">+142.00 USDT</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Sharing (10%) + Rebate</div>
+                </div>
+              </div>
+
+              <!-- Level 1 Direct 2 -->
+              <div class="revenue-item" style="border-left:3px solid var(--profit-green);">
+                <div>
+                  <div style="font-size:13px; font-weight:800; display:flex; align-items:center; gap:6px;">
+                    <span>BARRY HII CHAY WEE</span>
+                    <span class="rank-tag-v" style="font-size:9px; background:rgba(16,185,129,0.15); color:var(--profit-green); border-color:rgba(16,185,129,0.3);">LEVEL 1 DIRECT</span>
+                  </div>
+                  <div style="font-size:11px; color:var(--text-muted);">Dep: $2,000 USDT · Traded: 10.2 Lot · Profit: $320</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="green-text" style="font-weight:800; font-family:'JetBrains Mono';">+95.00 USDT</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Sharing (10%) + Rebate</div>
+                </div>
+              </div>
+
+              <!-- Level 1 Direct 3 -->
+              <div class="revenue-item" style="border-left:3px solid var(--profit-green);">
+                <div>
+                  <div style="font-size:13px; font-weight:800; display:flex; align-items:center; gap:6px;">
+                    <span>Nadiyah Khairunnisa</span>
+                    <span class="rank-tag-v" style="font-size:9px; background:rgba(16,185,129,0.15); color:var(--profit-green); border-color:rgba(16,185,129,0.3);">LEVEL 1 DIRECT</span>
+                  </div>
+                  <div style="font-size:11px; color:var(--text-muted);">Dep: $1,500 USDT · Traded: 6.8 Lot · Profit: $240</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="green-text" style="font-weight:800; font-family:'JetBrains Mono';">+80.00 USDT</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Sharing (10%) + Rebate</div>
+                </div>
+              </div>
+
+              <!-- Level 2 Indirect -->
+              <div class="revenue-item" style="border-left:3px solid var(--moon-gold); background:rgba(245,158,11,0.03);">
+                <div>
+                  <div style="font-size:13px; font-weight:800; display:flex; align-items:center; gap:6px;">
+                    <span>Yeoh Kok Wooi</span>
+                    <span style="font-size:9px; background:rgba(245,158,11,0.2); color:var(--moon-gold); padding:2px 6px; border-radius:4px; font-weight:800;">LEVEL 2 (via Hermawan)</span>
+                  </div>
+                  <div style="font-size:11px; color:var(--text-muted);">Dep: $2,000 USDT · Traded: 8.5 Lot · Profit: $260</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="green-text" style="font-weight:800; font-family:'JetBrains Mono';">+42.50 USDT</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Sharing (3%) + Rebate</div>
+                </div>
+              </div>
+
+              <!-- Level 3 Sub-Indirect -->
+              <div class="revenue-item" style="border-left:3px solid #a855f7; background:rgba(168,85,247,0.03);">
+                <div>
+                  <div style="font-size:13px; font-weight:800; display:flex; align-items:center; gap:6px;">
+                    <span>Kevin Sanjaya</span>
+                    <span style="font-size:9px; background:rgba(168,85,247,0.2); color:#c084fc; padding:2px 6px; border-radius:4px; font-weight:800;">LEVEL 3 (via Yeoh)</span>
+                  </div>
+                  <div style="font-size:11px; color:var(--text-muted);">Dep: $1,500 USDT · Traded: 5.0 Lot · Profit: $180</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="green-text" style="font-weight:800; font-family:'JetBrains Mono';">+25.00 USDT</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Sharing (2%) + Rebate</div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SKEMA PROFIT SHARING 3-LEVEL & TIER MODAL -->
+          <div class="bot-card" style="border:1px solid rgba(59,130,246,0.3); background:rgba(59,130,246,0.03);">
+            <div style="font-size:14px; font-weight:800; color:#60a5fa;">💡 Skema Pembagian Profit Sharing (3 Level & Modal)</div>
+            
+            <p style="font-size:12px; color:var(--text-soft); line-height:1.5;">
+              Dari total <b>30% Performance Fee</b> yang ditarik dari investor yang profit:
+            </p>
+
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; text-align:center; font-size:11px; margin-top:4px;">
+              <div style="background:#0b0e17; padding:8px; border-radius:10px; border:1px solid var(--border-line);">
+                <div style="color:var(--profit-green); font-weight:800;">Level 1 (Direct)</div>
+                <div style="font-size:15px; font-weight:900; font-family:'JetBrains Mono'; color:#fff;">10%</div>
+                <div style="color:var(--text-muted); font-size:9px;">dari total profit</div>
+              </div>
+              <div style="background:#0b0e17; padding:8px; border-radius:10px; border:1px solid var(--border-line);">
+                <div style="color:var(--moon-gold); font-weight:800;">Level 2</div>
+                <div style="font-size:15px; font-weight:900; font-family:'JetBrains Mono'; color:#fff;">3%</div>
+                <div style="color:var(--text-muted); font-size:9px;">dari total profit</div>
+              </div>
+              <div style="background:#0b0e17; padding:8px; border-radius:10px; border:1px solid var(--border-line);">
+                <div style="color:#c084fc; font-weight:800;">Level 3</div>
+                <div style="font-size:15px; font-weight:900; font-family:'JetBrains Mono'; color:#fff;">2%</div>
+                <div style="color:var(--text-muted); font-size:9px;">dari total profit</div>
+              </div>
+            </div>
+
+            <!-- Tiered Capital Table -->
+            <div style="margin-top:8px; border-top:1px solid var(--border-line); padding-top:8px;">
+              <div style="font-size:11px; font-weight:800; color:var(--text-muted); margin-bottom:6px;">PENGARUH JUMLAH DEPOSIT MODAL TERHADAP FEE:</div>
+              <div style="display:flex; flex-direction:column; gap:4px; font-size:11px;">
+                <div style="display:flex; justify-content:space-between; background:#0b0e17; padding:6px 10px; border-radius:8px;">
+                  <span>🥉 <b>Starter ($1,000 - $4,999)</b></span>
+                  <span>Fee: <b>30%</b> (Investor 70%)</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; background:#0b0e17; padding:6px 10px; border-radius:8px;">
+                  <span>🥈 <b>Growth ($5,000 - $19,999)</b></span>
+                  <span>Fee: <b>25%</b> (Investor 75%)</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; background:#0b0e17; padding:6px 10px; border-radius:8px;">
+                  <span>🥇 <b>VIP Whale ($20,000+)</b></span>
+                  <span>Fee: <b>20%</b> (Investor 80%)</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- TAB 5: SAYA (MINE & READ-ONLY PRESENTATION SETTINGS) -->
+        <section id="tab-mine" class="tab-section">
+          <div class="hero-banner-card">
+            <div class="banner-sub">Dompet Bahan Bakar (Gas Fuel Wallet)</div>
+            <div class="banner-val blue-text" id="mine-fuel-val">64.50 USDT</div>
+            <div style="font-size:12px; color:var(--text-muted);">Saldo Gas Fuel Aktif</div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px;">
+              <button class="btn-gold" onclick="triggerAction('openModal', 'modal-fuel-topup')">+ Isi Gas Fuel</button>
+              <button class="btn-sub" onclick="triggerAction('alert', 'Penarikan Dana Komisi Siap!')">↓ Tarik Dana</button>
+            </div>
+          </div>
+
+          <!-- SEWA VPS CLOUD MT5 (EROPA) -->
+          <div class="bot-card" style="border:1px solid rgba(16,185,129,0.35); background:rgba(16,185,129,0.04);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:18px;">🖥️</span>
+                <span style="font-size:14px; font-weight:800; color:var(--profit-green);">Sewa VPS Cloud MT5 (Eropa)</span>
+              </div>
+              <span class="rank-tag-v" id="vps-status-badge" style="background:rgba(16,185,129,0.2); border-color:var(--profit-green); color:var(--profit-green);">AKTIF</span>
+            </div>
+
+            <p style="font-size:12px; color:var(--text-soft); line-height:1.5; margin-top:8px;">
+              Server hosting 24/7 dedicated low-latency di London/Frankfurt untuk eksekusi Hedging Arbitrase Master &amp; Slave tanpa henti.
+            </p>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; background:rgba(0,0,0,0.3); padding:10px 12px; border-radius:10px; margin-top:8px;">
+              <div>
+                <div style="font-size:10px; color:var(--text-muted);">Biaya Sewa</div>
+                <div style="font-size:12px; font-weight:800; color:var(--moon-gold);">$8.00 <span style="font-size:10px; color:var(--text-soft);">(8 USDT)/bln</span></div>
+              </div>
+              <div>
+                <div style="font-size:10px; color:var(--text-muted);">Masa Aktif Hingga</div>
+                <div style="font-size:12px; font-weight:800; color:#fff;" id="vps-expiry-val">06 Okt 2026</div>
+              </div>
+            </div>
+
+            <button class="btn-sub" style="width:100%; margin-top:10px; border-color:rgba(16,185,129,0.4); color:var(--profit-green); font-weight:700;" onclick="payVpsSubscription()">
+              🔄 Perpanjang Sewa VPS ($8.00 / 8 USDT)
+            </button>
+          </div>
+
+          <!-- GANTI PASSWORD LOGIN -->
+          <div class="bot-card" style="border:1px solid rgba(59,130,246,0.35); background:rgba(59,130,246,0.05);">
+            <div style="font-size:14px; font-weight:800; color:var(--primary-blue); margin-bottom:4px;">🔑 Ganti Password Login</div>
+
+            <p style="font-size:12px; color:var(--text-soft); line-height:1.5;">
+              Segera ganti password default (mis. <b>admin123</b>) setelah akun Anda aktif, agar hanya Anda yang bisa mengakses dashboard ini.
+            </p>
+
+            <div class="form-group">
+              <label class="form-label">Password Saat Ini</label>
+              <input type="password" id="cp-current-pass" class="form-input" placeholder="Password login Anda sekarang">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Password Baru</label>
+              <input type="password" id="cp-new-pass" class="form-input" placeholder="min. 6 karakter">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Konfirmasi Password Baru</label>
+              <input type="password" id="cp-confirm-pass" class="form-input" placeholder="Ulangi password baru">
+            </div>
+
+            <button class="btn-gold" style="width:100%;" onclick="changeLoginPassword()">Ganti Password</button>
+          </div>
+
+          <!-- FITUR KHUSUS: PASSWORD READ-ONLY / PRESENTASI -->
+          <div class="bot-card" style="border:1px solid rgba(245,158,11,0.3); background:rgba(245,158,11,0.04);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:14px; font-weight:800; color:var(--moon-gold);">👁️ Password Read-Only (Presentasi)</div>
+              <span class="rank-tag-v" id="ro-status-badge">AKTIF</span>
+            </div>
+
+            <p style="font-size:12px; color:var(--text-soft); line-height:1.5;">
+              Bikin <b>password KEDUA</b> (beda dari password login normal) buat presentasi dashboard ini ke calon member baru. Siapapun yang login pakai password ini bisa <b>LIHAT semua menu (termasuk halaman ini)</b>, tapi <b>TIDAK BISA deposit / tarik dana / ubah data apapun</b>.
+            </p>
+
+            <div class="form-group">
+              <label class="form-label">Password Login Saat Ini (Konfirmasi)</label>
+              <input type="password" id="ro-current-pass" class="form-input" placeholder="Password login normal Anda">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Password Read-Only Baru</label>
+              <input type="text" id="ro-new-pass" class="form-input" placeholder="min. 6 karakter (Contoh: demo123456)">
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px;">
+              <button class="btn-gold" onclick="saveReadonlyPassword()">Simpan Password</button>
+              <button class="btn-sub" onclick="disableReadonlyPassword()">Nonaktifkan</button>
+            </div>
+          </div>
+
+          <!-- Account Settings List -->
+          <div class="bot-card" style="padding:8px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-line); cursor:pointer;" onclick="triggerAction('openModal', 'modal-bind-mt5')">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px;">🔗</span>
+                <span style="font-weight:700; font-size:13px;">Binding Akun Dual-MT5</span>
+              </div>
+              <span style="color:var(--text-muted);">Terhubung ›</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-line); cursor:pointer;" onclick="copyInviteLink()">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px;">🎁</span>
+                <span style="font-weight:700; font-size:13px;">Kode Undangan / Referral</span>
+              </div>
+              <span style="color:var(--moon-gold); font-weight:800;" id="mine-ref-code">ADMIN888 ›</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; cursor:pointer;" onclick="handleLogout()">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px;">🚪</span>
+                <span style="font-weight:700; font-size:13px; color:var(--loss-red);">Keluar / Logout Akun</span>
+              </div>
+              <span style="color:var(--loss-red);">Logout ›</span>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <!-- Bottom Nav -->
+      <nav class="app-bottom-nav">
+        <div class="nav-link active" onclick="switchTab('tab-home', this)">
+          <div class="nav-link-icon">🏠</div>
+          <span>Beranda</span>
+        </div>
+        <div class="nav-link" onclick="switchTab('tab-strategy', this)">
+          <div class="nav-link-icon">⚡</div>
+          <span>Live MT5</span>
+        </div>
+        <div class="nav-link" onclick="switchTab('tab-revenue', this)">
+          <div class="nav-link-icon">📊</div>
+          <span>Revenue</span>
+        </div>
+        <div class="nav-link" onclick="switchTab('tab-team', this)">
+          <div class="nav-link-icon">👥</div>
+          <span>Tim</span>
+        </div>
+        <div class="nav-link" onclick="switchTab('tab-mine', this)">
+          <div class="nav-link-icon">👤</div>
+          <span>Saya</span>
+        </div>
+      </nav>
+    </div>
+
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- MODAL: BINDING AKUN DUAL-MT5 (DETIL SESUAI LAMPIRAN)       -->
+  <!-- ========================================================== -->
+  <div id="modal-bind-mt5" class="modal-box">
+    <div class="modal-sheet">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h2 style="font-size:16px; font-weight:900;">Binding Akun Dual-MT5</h2>
+          <p style="font-size:11px; color:var(--text-muted);">Koneksi Akun Master & Slave ke Robot</p>
+        </div>
+        <button onclick="closeModal('modal-bind-mt5')" style="background:none; border:none; color:var(--text-dim); font-size:22px; cursor:pointer;">✕</button>
+      </div>
+
+      <div style="font-size:11px; color:var(--text-soft); line-height:1.5; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); border-radius:12px; padding:12px;">
+        💡 Anda sudah setor modal ke broker &amp; buka 2 akun. Isi data 2 akun (Master + Slave) di sini — VPS London/Frankfurt disiapkan otomatis 24/7 (Sewa VPS $8.00 / 8 USDT per bulan dipotong dari Saldo Gas Fuel).
+      </div>
+
+      <!-- AKUN MASTER SECTION -->
+      <div class="account-bind-section" style="border-left: 3px solid var(--profit-green);">
+        <div style="font-size:12px; font-weight:800; color:var(--profit-green);">AKUN MASTER (STP)</div>
+
+        <div class="form-group">
+          <label class="form-label">ID META (LOGIN MT5)</label>
+          <input type="number" id="bind-master-login" class="form-input" placeholder="Misal: 100870" value="100870">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">BROKER</label>
+          <input type="text" id="bind-master-broker" class="form-input" value="Prime Codex" readonly style="color:var(--profit-green); font-weight:800; cursor:default;">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">PASSWORD TRADER</label>
+          <input type="password" id="bind-master-pass" class="form-input" placeholder="Password trading master">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">MODAL (USDT)</label>
+          <input type="number" id="bind-master-modal" class="form-input" placeholder="1000" value="2000">
+        </div>
+      </div>
+
+      <!-- AKUN SLAVE SECTION -->
+      <div class="account-bind-section" style="border-left: 3px solid var(--primary-blue);">
+        <div style="font-size:12px; font-weight:800; color:var(--primary-blue);">AKUN SLAVE (BONUS)</div>
+
+        <div class="form-group">
+          <label class="form-label">ID META (LOGIN MT5)</label>
+          <input type="number" id="bind-slave-login" class="form-input" placeholder="Misal: 100871" value="100871">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">BROKER</label>
+          <input type="text" id="bind-slave-broker" class="form-input" value="Prime Codex (bonus 20% LP)" readonly style="color:var(--primary-blue); font-weight:800; cursor:default;">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">PASSWORD TRADER</label>
+          <input type="password" id="bind-slave-pass" class="form-input" placeholder="Password trading slave">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">MODAL (USDT)</label>
+          <input type="number" id="bind-slave-modal" class="form-input" placeholder="1000" value="2000">
+        </div>
+      </div>
+
+      <button class="btn-main" onclick="submitBindMT5()">Submit & Binding Sekarang</button>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- MODAL: ISI SALDO & WALLET CRYPTO (PERSIS SESUAI SCREENSHOT) -->
+  <!-- ========================================================== -->
+  <div id="modal-fuel-topup" class="modal-box">
+    <div class="modal-sheet" style="max-width:460px; padding:18px;">
+      
+      <!-- Top Action Switcher (+ Isi Saldo vs ↓ Tarik Dana) -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; background:rgba(0,0,0,0.4); padding:6px; border-radius:14px;">
+        <button id="wallet-tab-deposit" style="background:var(--moon-gold-gradient); color:#000; font-weight:800; border:none; border-radius:10px; padding:10px; font-size:13px; cursor:pointer;" onclick="switchWalletMode('deposit')">+ Isi saldo</button>
+        <button id="wallet-tab-withdraw" style="background:transparent; color:var(--text-soft); font-weight:700; border:none; border-radius:10px; padding:10px; font-size:13px; cursor:pointer;" onclick="switchWalletMode('withdraw')">↓ Tarik dana</button>
+      </div>
+
+      <!-- DEPOSIT VIEW -->
+      <div id="wallet-view-deposit" style="display:flex; flex-direction:column; gap:12px;">
+        <div style="font-size:11px; color:var(--text-soft); line-height:1.5; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:10px; padding:8px 12px;">
+          💡 <b>Fungsi Gas Fuel:</b> Menampung saldo untuk pembagian hasil profit trading (20%) dan biaya operasional hosting VPS Cloud MT5 Eropa ($8.00 / 8 USDT per bulan).
+        </div>
+        
+        <!-- STEP 1: INPUT NOMINAL & PILIH JARINGAN -->
+        <div id="dep-step-input" style="background:#101826; border:1px solid var(--border-line); border-radius:16px; padding:16px; display:flex; flex-direction:column; gap:14px;">
+          <div style="font-size:13px; font-weight:800; color:#fff;">1. MASUKKAN JUMLAH DEPOSIT (USDT)</div>
+          
+          <div class="form-group">
+            <label class="form-label">Nominal Deposit (USDT)</label>
+            <input type="number" id="custom-dep-amount" class="form-input" placeholder="Masukkan jumlah USDT (contoh: 100)" value="100" style="font-size:18px; font-weight:900; font-family:'JetBrains Mono'; color:var(--moon-gold);">
+          </div>
+
+          <!-- Quick Preset Buttons -->
+          <div>
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:6px;">PILIHAN CEPAT:</div>
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;">
+              <button class="btn-sub" style="padding:8px 4px; font-size:11px; font-weight:800;" onclick="setDepositAmount(50)">$50</button>
+              <button class="btn-sub" style="padding:8px 4px; font-size:11px; font-weight:800;" onclick="setDepositAmount(100)">$100</button>
+              <button class="btn-sub" style="padding:8px 4px; font-size:11px; font-weight:800;" onclick="setDepositAmount(200)">$200</button>
+              <button class="btn-sub" style="padding:8px 4px; font-size:11px; font-weight:800;" onclick="setDepositAmount(500)">$500</button>
+            </div>
+          </div>
+
+          <!-- Network Selector -->
+          <div class="form-group">
+            <label class="form-label">PILIH JARINGAN USDT</label>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <button id="net-bep20" class="btn-sub" style="padding:10px; font-size:12px; border-color:var(--moon-gold); color:var(--moon-gold); font-weight:800;" onclick="selectNetwork('BEP20')">BEP20 (BSC)</button>
+              <button id="net-trc20" class="btn-sub" style="padding:10px; font-size:12px;" onclick="selectNetwork('TRC20')">TRC20</button>
+            </div>
+          </div>
+
+          <button class="btn-main" onclick="generateDepositInvoice()">Lanjutkan & Dapatkan QR Pembayaran ›</button>
+        </div>
+
+        <!-- STEP 2: INVOICE CONTAINER (PERSIS SESUAI SCREENSHOT) -->
+        <div id="dep-step-invoice" style="display:none; background:#101826; border:1px solid rgba(16,185,129,0.3); border-radius:16px; padding:16px; flex-direction:column; gap:14px;">
+          
+          <!-- Invoice Header -->
+          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-line); padding-bottom:10px;">
+            <div>
+              <span style="font-size:14px; font-weight:800; color:#fff;">+ Deposit <span id="dep-nominal-header">$100.00</span></span>
+              <span style="font-size:11px; color:var(--text-muted); margin-left:6px;" id="dep-time-header">01 Sep, 13.43</span>
+            </div>
+            <span style="background:rgba(245,158,11,0.2); color:var(--moon-gold); font-size:10px; font-weight:800; padding:3px 8px; border-radius:8px;">menunggu</span>
+          </div>
+
+          <!-- Instruction & Network -->
+          <div style="font-size:12px; color:var(--text-soft); display:flex; justify-content:space-between; align-items:center;">
+            <span>Kirim <b>PERSIS <span id="dep-exact-amount" style="color:#fff;">$100.91 USDT</span></b> (jaringan <b id="dep-network-label" style="color:var(--moon-gold);">BEP20</b>) ke:</span>
+            <button onclick="backToDepositInput()" style="background:none; border:none; color:var(--primary-blue); font-size:11px; font-weight:700; cursor:pointer;">Ubah Nominal</button>
+          </div>
+
+          <!-- QR Code Generator -->
+          <div style="display:flex; justify-content:center; padding:8px 0;">
+            <div style="background:#ffffff; padding:12px; border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,0.5); display:inline-block;">
+              <img id="wallet-qrcode" src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=0x592b68bdD0775a1D85a73E320c2daB06a3369702F" alt="QR Code Wallet" style="width:140px; height:140px; display:block;">
+            </div>
+          </div>
+
+          <!-- Wallet Address with Copy -->
+          <div style="background:#0b0e17; border:1px solid var(--border-line); border-radius:10px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="font-size:11px; font-family:'JetBrains Mono', monospace; color:var(--text-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" id="wallet-address-text">
+              0x592b68bdD0775a1D85a73E320c2daB06a3369702F
+            </div>
+            <button onclick="copyWalletAddress()" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:10px; font-weight:700; padding:4px 10px; border-radius:6px; cursor:pointer;">salin</button>
+          </div>
+
+          <!-- Exact Amount Warning Box -->
+          <div style="background:rgba(245,158,11,0.06); border:1px solid rgba(245,158,11,0.4); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:6px;">
+            <div style="font-size:11px; font-weight:800; color:var(--moon-gold);">⚠️ Jumlah HARUS persis (bukan dibulatkan!)</div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="font-size:18px; font-weight:900; font-family:'JetBrains Mono'; color:#fff;" id="dep-exact-val">$100.91</div>
+              <button onclick="copyExactAmount()" style="background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:10px; font-weight:700; padding:3px 8px; border-radius:6px; cursor:pointer;">salin jumlah</button>
+            </div>
+            <div style="font-size:10px; color:var(--text-muted); line-height:1.4;">
+              Sistem otomatis deteksi & setujui dalam beberapa menit setelah transfer masuk — tidak perlu kirim TX hash kecuali ingin lebih cepat/ada kendala.
+            </div>
+          </div>
+
+          <!-- TX Hash Input -->
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <label style="font-size:10px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">SUDAH TRANSFER TAPI BELUM TERDETEKSI? ISI TX HASH (OPSIONAL, PERCEPAT PROSES)</label>
+            <input type="text" id="tx-hash-input" class="form-input" placeholder="0x..." style="font-family:'JetBrains Mono'; font-size:12px; padding:10px 12px;">
+          </div>
+
+          <button class="btn-gold" style="width:100%; border-radius:10px; padding:12px;" onclick="submitTxHash()">✓ Kirim TX hash</button>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div style="background:#0b0e17; border:1px solid var(--border-line); border-radius:12px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:12px; font-weight:800;">↓ Tarik $72.00</div>
+            <div style="font-size:10px; color:var(--text-muted);">22 Agu, 15.01</div>
+          </div>
+          <span style="background:rgba(16,185,129,0.15); color:var(--profit-green); font-size:10px; font-weight:800; padding:3px 8px; border-radius:8px;">✓ disetujui</span>
+        </div>
+
+      </div>
+
+      <!-- WITHDRAW VIEW -->
+      <div id="wallet-view-withdraw" style="display:none; flex-direction:column; gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Nominal Penarikan (USDT)</label>
+          <input type="number" id="wd-amount" class="form-input" placeholder="Min. 20 USDT" value="50">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Jaringan Penarikan</label>
+          <select id="wd-network" class="form-input">
+            <option value="BEP20">USDT (BEP-20 / BSC)</option>
+            <option value="TRC20">USDT (TRC-20)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Alamat Dompet Penerima (USDT)</label>
+          <input type="text" id="wd-address" class="form-input" placeholder="Tempel alamat dompet Anda">
+        </div>
+        <button class="btn-main" onclick="submitWithdraw()">Ajukan Penarikan Dana</button>
+      </div>
+
+      <button onclick="closeModal('modal-fuel-topup')" class="btn-sub" style="width:100%; margin-top:6px;">Tutup</button>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- MODAL: DETAIL SIKLUS TRADING & REVENUE BREAKDOWN           -->
+  <!-- ========================================================== -->
+  <div id="modal-revenue-detail" class="modal-box">
+    <div class="modal-sheet" style="max-width:440px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h2 style="font-size:16px; font-weight:900;">Rincian Siklus Revenue</h2>
+          <p style="font-size:11px; color:var(--text-muted);" id="rd-date-subtitle">01 Sep 2026</p>
+        </div>
+        <button onclick="closeModal('modal-revenue-detail')" style="background:none; border:none; color:var(--text-dim); font-size:22px; cursor:pointer;">✕</button>
+      </div>
+
+      <!-- Gross Profit Result Box -->
+      <div style="background:linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(59,130,246,0.1) 100%); border:1px solid rgba(16,185,129,0.3); border-radius:14px; padding:14px; text-align:center;">
+        <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">TOTAL GROSS PROFIT SIKLUS</div>
+        <div style="font-size:26px; font-weight:900; font-family:'JetBrains Mono'; color:var(--profit-green);" id="rd-gross-val">+31.74 USDT</div>
+        <div style="font-size:11px; color:var(--text-soft); margin-top:2px;">Pair: <b>XAUUSD Gold Dual-Hedge</b> · Vol: <b id="rd-vol-val">1.20 Lot</b></div>
+      </div>
+
+      <!-- Dual MT5 Execution Breakdown -->
+      <div style="background:#0b0e17; border:1px solid var(--border-line); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+        <div style="font-size:11px; font-weight:800; color:var(--text-muted);">EKSEKUSI DUAL-MT5 ENGINE:</div>
+        
+        <div style="display:flex; justify-content:space-between; font-size:12px; padding-bottom:6px; border-bottom:1px solid var(--border-line);">
+          <span>🟢 Akun Master STP (Prime Codex):</span>
+          <b class="green-text" id="rd-master-profit">+62.50 USDT</b>
+        </div>
+        
+        <div style="display:flex; justify-content:space-between; font-size:12px;">
+          <span>🔵 Akun Slave LP (Prime Codex Bonus 20%):</span>
+          <b class="gold-text" id="rd-slave-hedge">-30.76 USDT</b>
+        </div>
+      </div>
+
+      <!-- Revenue Allocation Breakdown -->
+      <div style="background:#0b0e17; border:1px solid var(--border-line); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+        <div style="font-size:11px; font-weight:800; color:var(--text-muted);">ALOKASI PEMBAGIAN HASIL:</div>
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; padding-bottom:6px; border-bottom:1px solid var(--border-line);">
+          <div>
+            <div style="font-weight:700; color:#fff;">Hak Bersih Investor (70%)</div>
+            <div style="font-size:10px; color:var(--text-muted);">Langsung masuk & stay di MT5 investor</div>
+          </div>
+          <b class="green-text" style="font-size:14px; font-family:'JetBrains Mono';" id="rd-investor-net">+22.22 USDT</b>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; padding-bottom:6px; border-bottom:1px solid var(--border-line);">
+          <div>
+            <div style="font-weight:700; color:#fff;">Fuel Fee Pengelola (30%)</div>
+            <div style="font-size:10px; color:var(--text-muted);">Dipotong otomatis dari dompet gas fuel</div>
+          </div>
+          <b class="red-text" style="font-size:14px; font-family:'JetBrains Mono';" id="rd-fuel-fee">-9.52 USDT</b>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+          <div>
+            <div style="font-weight:700; color:#fff;">Bonus Rebate IB ($10/Lot)</div>
+            <div style="font-size:10px; color:var(--text-muted);">Cashback komisi dari broker Prime Codex</div>
+          </div>
+          <b class="gold-text" style="font-size:14px; font-family:'JetBrains Mono';" id="rd-rebate-val">+12.00 USDT</b>
+        </div>
+      </div>
+
+      <button onclick="closeModal('modal-revenue-detail')" class="btn-main" style="width:100%;">Tutup Rincian</button>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null;
+    let isReadOnlySession = false;
+
+    function showAuthScreen(screenId) {
+      document.querySelectorAll('.auth-view').forEach(s => s.classList.remove('active'));
+      document.getElementById('dashboard-view').classList.remove('active');
+      document.getElementById(screenId).classList.add('active');
+      window.scrollTo(0, 0);
+    }
+
+    function switchTab(tabId, el) {
+      document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      el.classList.add('active');
+      window.scrollTo(0, 0);
+    }
+
+    function openModal(id) { 
+      if (isReadOnlySession) {
+        alert("🔒 Akses Dibatasi: Akun ini sedang dibuka dalam Mode Presentasi (Read-Only). Anda tidak dapat melakukan deposit, penarikan dana, atau mengubah data.");
+        return;
+      }
+      document.getElementById(id).classList.add('open'); 
+    }
+    
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+    function triggerAction(actionType, param) {
+      if (isReadOnlySession) {
+        alert("🔒 Akses Dibatasi: Akun ini sedang dibuka dalam Mode Presentasi (Read-Only). Anda tidak dapat melakukan deposit, penarikan dana, atau mengubah data.");
+        return;
+      }
+      if (actionType === 'openModal') openModal(param);
+      if (actionType === 'alert') alert(param);
+    }
+
+    // ==========================================================
+    // REALTIME DUAL-MT5 LIVE POSITIONS & HEDGING MONITOR
+    // ==========================================================
+    async function fetchLiveMT5(forceAlert = false) {
+      try {
+        // Scope polling ke akun Master milik user yang login (multi-investor safe).
+        const loginParam = currentUser && currentUser.mt5_master && currentUser.mt5_master.login
+          ? `?login=${encodeURIComponent(currentUser.mt5_master.login)}` : '';
+        const res = await fetch('/api/mt5/live' + loginParam);
+        if (!res.ok) return;
+        const data = await res.json();
+        renderLiveMT5(data);
+        if (forceAlert) {
+          alert("✅ Data Posisi Live MT5 Berhasil Disinkronkan!");
+        }
+      } catch (e) {
+        console.log("MT5 poll silent catch:", e);
+      }
+    }
+
+    function renderLiveMT5(d) {
+      if (!d) return;
+      
+      const m = d.master || {};
+      const s = d.slave || {};
+      const pairs = d.pairs || [];
+      const netFl = Number(d.total_floating ?? ((m.profit || 0) + (s.profit || 0))).toFixed(2);
+      const netVal = parseFloat(netFl);
+      const isPos = netVal >= 0;
+      const rateIdr = 16000;
+
+      // Engine status — show stale/offline honestly
+      const engineTag = document.getElementById('live-engine-tag');
+      if (engineTag) {
+        if (d.online === false) {
+          engineTag.textContent = d.status_engine || '⚪ OFFLINE — Telemetry terputus';
+        } else if (d.status_engine) {
+          engineTag.textContent = d.status_engine;
+        }
+      }
+
+      // Top Net Floating
+      const totalNetEl = document.getElementById('live-total-net');
+      const totalNetIdrEl = document.getElementById('live-total-net-idr');
+      if (totalNetEl) {
+        totalNetEl.textContent = (isPos ? '+$' : '-$') + Math.abs(netVal).toFixed(2);
+        totalNetEl.style.color = isPos ? '#4ade80' : '#f87171';
+      }
+      if (totalNetIdrEl) {
+        totalNetIdrEl.textContent = `(Rp ${isPos ? '+' : '-'}${Math.abs(Math.round(netVal * rateIdr)).toLocaleString('id-ID')})`;
+      }
+
+      // Target TP calculation based on Base Lot
+      const baseLot = m.positions && m.positions[0] ? Number(m.positions[0].volume) : 0.15;
+      const targetTpUsd = ((baseLot / 0.10) * 31.74 + 20.0).toFixed(2);
+      const targetTpIdr = Math.round(targetTpUsd * rateIdr).toLocaleString('id-ID');
+      const targetTpEl = document.getElementById('live-target-tp');
+      if (targetTpEl) {
+        targetTpEl.textContent = `+$${targetTpUsd} USD (Rp ${targetTpIdr})`;
+      }
+      
+      const progressPct = Math.min(100, Math.max(0, Math.round((netVal / targetTpUsd) * 100)));
+      const tpProgressEl = document.getElementById('live-tp-progress');
+      const tpPctEl = document.getElementById('live-tp-pct');
+      if (tpProgressEl) tpProgressEl.style.width = `${progressPct}%`;
+      if (tpPctEl) tpPctEl.textContent = progressPct > 0 ? `${progressPct}% Menuju TP` : 'Belum Profit (Floating Negatif)';
+
+      // Logins & Balances
+      if (document.getElementById('live-master-login')) document.getElementById('live-master-login').textContent = m.login || '100870';
+      if (document.getElementById('live-slave-login')) document.getElementById('live-slave-login').textContent = s.login || '100871';
+      if (document.getElementById('card-master-login')) document.getElementById('card-master-login').textContent = m.login || '100870';
+      if (document.getElementById('card-slave-login')) document.getElementById('card-slave-login').textContent = s.login || '100871';
+
+      if (document.getElementById('card-master-bal')) document.getElementById('card-master-bal').textContent = `$${Number(m.balance || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+      if (document.getElementById('card-master-eq')) document.getElementById('card-master-eq').textContent = `$${Number(m.equity || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+      if (document.getElementById('card-master-prof')) {
+        const mp = Number(m.profit || 0);
+        document.getElementById('card-master-prof').textContent = (mp >= 0 ? '+$' : '-$') + Math.abs(mp).toFixed(2);
+        document.getElementById('card-master-prof').style.color = mp >= 0 ? '#4ade80' : '#f87171';
+      }
+      if (document.getElementById('card-master-ml')) document.getElementById('card-master-ml').textContent = `${Number(m.margin_level || 0).toFixed(1)}%`;
+      if (document.getElementById('card-master-free')) document.getElementById('card-master-free').textContent = `$${Number(m.free_margin || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+
+      if (document.getElementById('card-slave-bal')) document.getElementById('card-slave-bal').textContent = `$${Number(s.balance || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+      if (document.getElementById('card-slave-eq')) document.getElementById('card-slave-eq').textContent = `$${Number(s.equity || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+      if (document.getElementById('card-slave-prof')) {
+        const sp = Number(s.profit || 0);
+        document.getElementById('card-slave-prof').textContent = (sp >= 0 ? '+$' : '-$') + Math.abs(sp).toFixed(2);
+        document.getElementById('card-slave-prof').style.color = sp >= 0 ? '#4ade80' : '#f87171';
+      }
+      if (document.getElementById('card-slave-credit')) document.getElementById('card-slave-credit').textContent = `+$${Number(s.credit || 300).toFixed(2)} USD`;
+      if (document.getElementById('card-slave-ml')) document.getElementById('card-slave-ml').textContent = `${Number(s.margin_level || 0).toFixed(1)}%`;
+
+      if (document.getElementById('param-base-lot')) document.getElementById('param-base-lot').textContent = `${baseLot.toFixed(2)} Lot`;
+
+      // Render Positions Container
+      const container = document.getElementById('live-positions-container');
+      const badge = document.getElementById('live-layer-badge');
+      if (container) {
+        if (!pairs || pairs.length === 0) {
+          if (badge) badge.textContent = "0 Posisi (Standby)";
+          container.innerHTML = `
+            <div style="background:var(--bg-card); border:1px dashed rgba(255,255,255,0.15); border-radius:12px; padding:24px; text-align:center;">
+              <div style="font-size:24px; margin-bottom:8px;">✨</div>
+              <div style="font-size:13px; font-weight:800; color:#fff;">SIKLUS BERSIH / STANDBY</div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+                Semua posisi sudah Take Profit. Robot sedang memantau harga emas untuk membuka Layer 1 baru secara serentak.
+              </div>
+            </div>`;
+        } else {
+          if (badge) badge.textContent = `${pairs.length} Pasang Terbuka`;
+          let html = '';
+          pairs.forEach((p, idx) => {
+            const mData = p.master || {};
+            const sData = p.slave || {};
+            const pNet = Number(p.net_profit ?? ((mData.profit || 0) + (sData.profit || 0))).toFixed(2);
+            const pNetVal = parseFloat(pNet);
+            const pIsPos = pNetVal >= 0;
+            const pNetIdr = Math.round(pNetVal * rateIdr).toLocaleString('id-ID');
+
+            html += `
+              <div style="background:var(--bg-card); border:1px solid rgba(255,255,255,0.08); border-radius:12px; overflow:hidden;">
+                <div style="background:rgba(255,255,255,0.03); padding:8px 12px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.06);">
+                  <div style="font-size:12px; font-weight:900; color:#fff; display:flex; align-items:center; gap:6px;">
+                    <span style="color:var(--moon-gold);">●</span>
+                    <span>LAYER #${p.layer || (idx + 1)} (XAUUSD)</span>
+                  </div>
+                  <span style="font-size:9px; font-weight:800; background:rgba(34,197,94,0.15); color:#4ade80; padding:2px 6px; border-radius:4px;">🔒 TER-HEDGE</span>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px 12px;">
+                  <!-- Master Side -->
+                  <div style="background:rgba(96,165,250,0.05); border:1px solid rgba(96,165,250,0.15); padding:8px; border-radius:8px;">
+                    <div style="font-size:10px; font-weight:800; color:#93c5fd; margin-bottom:2px;">👑 MASTER (SELL)</div>
+                    <div style="font-size:11px; font-weight:800; font-family:'JetBrains Mono';">#${mData.ticket || '-'} · ${mData.volume || 0.15}L</div>
+                    <div style="font-size:10px; color:var(--text-muted);">@ ${mData.price_open || '-'}</div>
+                    <div style="font-size:12px; font-weight:800; font-family:'JetBrains Mono'; margin-top:4px; color:${mData.profit >= 0 ? '#4ade80' : '#f87171'};">
+                      ${mData.profit >= 0 ? '+$' : '-$'}${Math.abs(mData.profit || 0).toFixed(2)}
+                    </div>
+                  </div>
+
+                  <!-- Slave Side -->
+                  <div style="background:rgba(251,191,36,0.05); border:1px solid rgba(251,191,36,0.15); padding:8px; border-radius:8px;">
+                    <div style="font-size:10px; font-weight:800; color:var(--moon-gold); margin-bottom:2px;">🛡️ SLAVE (BUY)</div>
+                    <div style="font-size:11px; font-weight:800; font-family:'JetBrains Mono';">#${sData.ticket || '-'} · ${sData.volume || 0.17}L</div>
+                    <div style="font-size:10px; color:var(--text-muted);">@ ${sData.price_open || '-'}</div>
+                    <div style="font-size:12px; font-weight:800; font-family:'JetBrains Mono'; margin-top:4px; color:${sData.profit >= 0 ? '#4ade80' : '#f87171'};">
+                      ${sData.profit >= 0 ? '+$' : '-$'}${Math.abs(sData.profit || 0).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Net Strip -->
+                <div style="background:rgba(0,0,0,0.25); padding:6px 12px; display:flex; justify-content:space-between; align-items:center; font-size:11px; border-top:1px solid rgba(255,255,255,0.04);">
+                  <span style="color:var(--text-muted);">Selisih Pasangan Ini:</span>
+                  <span style="font-weight:900; font-family:'JetBrains Mono'; color:${pIsPos ? '#4ade80' : '#f87171'};">
+                    ${pIsPos ? '+$' : '-$'}${Math.abs(pNetVal).toFixed(2)} (Rp ${pIsPos ? '+' : '-'}${Math.abs(Math.round(pNetVal * rateIdr)).toLocaleString('id-ID')})
+                  </span>
+                </div>
+              </div>`;
+          });
+          container.innerHTML = html;
+        }
+      }
+    }
+
+    // Auto-poll live MT5 every 2.5 seconds
+    setInterval(fetchLiveMT5, 2500);
+    // Initial fetch
+    fetchLiveMT5();
+
+    // IN-MEMORY / LOCAL USERS REPOSITORY (100% RESILIENT TO SERVERLESS COLD START)
+    const localUsers = [
+      {
+        id: "USR-1000",
+        userid: "admin",
+        name: "Administrator",
+        email: "admin@novahedge.io",
+        phone: "+62 812-3037-7777",
+        password: "admin123",
+        readonly_password: "demo123456",
+        rank: "V6 PRESIDENT",
+        fuel_balance: 100.00,
+        referral_code: "ADMIN888",
+        sponsor_code: "ROOT",
+        join_date: "01 Sep 2026",
+        deposit: 3000.00,
+        mt5_master: { broker: "Prime Codex", server: "PrimeCodex-Live", login: 100870, equity: 3420.50, balance: 3000.00 },
+        mt5_slave: { broker: "Prime Codex (bonus 20% LP)", server: "PrimeCodex-Bonus", login: 100871, equity: 2950.00, balance: 3000.00, credit: 600.00 },
+        lots_traded: 18.4,
+        total_profit: 672.35
+      },
+      {
+        id: "USR-1001",
+        userid: "maharindra",
+        name: "Mahar Indra",
+        email: "mahar.indra@gmail.com",
+        phone: "+62 812-3037-7777",
+        password: "admin123",
+        readonly_password: "demo123456",
+        rank: "V2 LEADER",
+        fuel_balance: 64.50,
+        referral_code: "MAHAR88",
+        sponsor_code: "ADMIN888",
+        join_date: "01 Sep 2026",
+        deposit: 3000.00,
+        mt5_master: { broker: "Prime Codex", server: "PrimeCodex-Live", login: 100870, equity: 3420.50, balance: 3000.00 },
+        mt5_slave: { broker: "Prime Codex (bonus 20% LP)", server: "PrimeCodex-Bonus", login: 100871, equity: 2950.00, balance: 3000.00, credit: 600.00 },
+        lots_traded: 18.4,
+        total_profit: 672.35
+      }
+    ];
+
+    // LOGIN HANDLER (WITH INSTANT ZERO-LATENCY FALLBACK)
+    async function handleLogin() {
+      const loginId = (document.getElementById('login-id').value || '').trim().toLowerCase();
+      const password = (document.getElementById('login-pass').value || '').trim();
+
+      if (!loginId || !password) {
+        alert('Mohon isi User ID / Email dan Password Anda.');
+        return;
+      }
+
+      let userFound = null;
+      let isReadOnly = false;
+
+      // 1. Try Backend API
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ login_id: loginId, password })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            userFound = data.user;
+            isReadOnly = !!data.is_readonly;
+          }
+        }
+      } catch (e) {
+        console.warn('Backend unavailable, using instant fallback', e);
+      }
+
+      // 2. Instant Local Fallback — hanya untuk mode demo offline.
+      // Password harus cocok dengan user yang dimaksud (tanpa universal bypass).
+      if (!userFound) {
+        const match = localUsers.find(u => 
+          (u.userid.toLowerCase() === loginId || u.email.toLowerCase() === loginId) &&
+          u.password === password
+        );
+
+        if (match) {
+          userFound = match;
+          isReadOnly = false;
+        } else {
+          const roMatch = localUsers.find(u => 
+            (u.userid.toLowerCase() === loginId || u.email.toLowerCase() === loginId) &&
+            u.readonly_password && u.readonly_password === password
+          );
+          if (roMatch) {
+            userFound = roMatch;
+            isReadOnly = true;
+          }
+        }
+      }
+
+      if (userFound) {
+        currentUser = userFound;
+        isReadOnlySession = isReadOnly;
+        const roNotice = document.getElementById('readonly-notice');
+        if (roNotice) {
+          if (isReadOnlySession) roNotice.classList.add('show');
+          else roNotice.classList.remove('show');
+        }
+
+        // 1. Hide auth screens & show dashboard view FIRST
+        document.querySelectorAll('.auth-view').forEach(s => s.classList.remove('active'));
+        const dashView = document.getElementById('dashboard-view');
+        if (dashView) dashView.classList.add('active');
+        window.scrollTo(0, 0);
+
+        // 2. Render user data safely
+        try {
+          renderDashboardUser(currentUser);
+        } catch (err) {
+          console.error("renderDashboardUser catch:", err);
+        }
+
+        // 3. Immediately poll live MT5 (scoped ke login Master milik user ini)
+        try {
+          fetchLiveMT5();
+        } catch (err) {}
+      } else {
+        alert('❌ User ID / Email atau Password salah!\n\nDemo: admin / admin123 · Presentasi: demo123456');
+      }
+    }
+
+    // REGISTER HANDLER
+    async function handleRegister() {
+      const name = document.getElementById('reg-name').value;
+      const email = document.getElementById('reg-email').value;
+      const phone = document.getElementById('reg-phone').value;
+      const userid = document.getElementById('reg-userid').value;
+      const pass = document.getElementById('reg-pass').value;
+      const passConf = document.getElementById('reg-pass-confirm').value;
+      const sponsor = document.getElementById('reg-sponsor').value;
+
+      if (!name || !email || !userid || !pass) {
+        alert('Mohon lengkapi Nama, Email, User ID, dan Password.');
+        return;
+      }
+      if (pass !== passConf) {
+        alert('Konfirmasi password tidak cocok!');
+        return;
+      }
+
+      const newUser = {
+        id: `USR-${Math.floor(1000 + Math.random() * 9000)}`,
+        userid: userid,
+        name: name,
+        email: email,
+        phone: phone,
+        password: pass,
+        readonly_password: "",
+        rank: "V1 MEMBER",
+        fuel_balance: 0.00,
+        referral_code: userid.toUpperCase(),
+        sponsor_code: sponsor,
+        join_date: new Date().toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: 'numeric' }),
+        deposit: 1000.00,
+        mt5_master: null,
+        mt5_slave: null,
+        lots_traded: 0.0,
+        total_profit: 0.00
+      };
+
+      localUsers.push(newUser);
+
+      try {
+        await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, phone, userid, password: pass, sponsor })
+        });
+      } catch (e) {
+        console.warn('Offline register saved locally');
+      }
+
+      alert('🎉 Pendaftaran Berhasil! Silakan masuk dengan User ID Anda.');
+      document.getElementById('login-id').value = userid;
+      document.getElementById('login-pass').value = pass;
+      showAuthScreen('screen-login');
+    }
+
+    // CHANGE LOGIN PASSWORD
+    async function changeLoginPassword() {
+      if (isReadOnlySession) {
+        alert("🔒 Akses Dibatasi pada Mode Read-Only. Logout dan login dengan password utama untuk mengganti password.");
+        return;
+      }
+
+      const currentPass = document.getElementById('cp-current-pass').value;
+      const newPass = document.getElementById('cp-new-pass').value;
+      const confirmPass = document.getElementById('cp-confirm-pass').value;
+
+      if (!currentPass || !newPass || !confirmPass) {
+        alert("Mohon isi semua field password.");
+        return;
+      }
+      if (newPass.length < 6) {
+        alert("Password baru minimal 6 karakter.");
+        return;
+      }
+      if (newPass !== confirmPass) {
+        alert("Konfirmasi password tidak cocok.");
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userid: currentUser.userid, current_password: currentPass, new_password: newPass })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          alert("✅ " + data.message);
+          // Paksa re-login agar sesi selaras dengan kredensial baru
+          handleLogout();
+        } else {
+          alert("❌ " + (data.error || "Gagal mengganti password"));
+        }
+      } catch (e) {
+        alert("Gagal menghubungi server.");
+      }
+    }
+
+    // SAVE READ-ONLY PASSWORD
+    async function saveReadonlyPassword() {
+      if (isReadOnlySession) {
+        alert("🔒 Akses Dibatasi pada Mode Read-Only.");
+        return;
+      }
+
+      const currentPass = document.getElementById('ro-current-pass').value;
+      const newReadonlyPass = document.getElementById('ro-new-pass').value;
+
+      if (!currentPass || !newReadonlyPass) {
+        alert("Mohon isi Password Login Saat Ini dan Password Read-Only Baru.");
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/user/set-readonly-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userid: currentUser.userid, current_password: currentPass, readonly_password: newReadonlyPass })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          alert("✅ " + data.message);
+          document.getElementById('ro-status-badge').innerText = "AKTIF";
+          document.getElementById('ro-current-pass').value = "";
+          document.getElementById('ro-new-pass').value = "";
+        } else {
+          alert("❌ " + (data.error || "Gagal menyimpan password read-only"));
+        }
+      } catch (e) {
+        alert("Gagal menghubungi server.");
+      }
+    }
+
+    // DISABLE READ-ONLY PASSWORD
+    async function disableReadonlyPassword() {
+      if (isReadOnlySession) {
+        alert("🔒 Akses Dibatasi pada Mode Read-Only.");
+        return;
+      }
+
+      const currentPass = document.getElementById('ro-current-pass').value;
+      if (!currentPass) {
+        alert("Mohon masukkan Password Login Saat Ini untuk konfirmasi penonaktifan.");
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/user/set-readonly-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userid: currentUser.userid, current_password: currentPass, readonly_password: "" })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          alert("✅ Password Read-Only dinonaktifkan.");
+          document.getElementById('ro-status-badge').innerText = "NONAKTIF";
+          document.getElementById('ro-current-pass').value = "";
+          document.getElementById('ro-new-pass').value = "";
+        } else {
+          alert("❌ " + (data.error || "Gagal menonaktifkan"));
+        }
+      } catch (e) {
+        alert("Gagal menghubungi server.");
+      }
+    }
+
+    // PAY / EXTEND VPS SUBSCRIPTION ($8.00 / 8 USDT per bulan)
+    async function payVpsSubscription() {
+      if (isReadOnlySession) {
+        alert("🔒 Akses Dibatasi pada Mode Read-Only.");
+        return;
+      }
+      if (!currentUser) {
+        alert("Silakan login terlebih dahulu.");
+        return;
+      }
+
+      const confirmPay = confirm("Perpanjang sewa VPS Cloud MT5 Eropa selama 30 hari sebesar 8 USDT ($8.00) dari Saldo Gas Fuel?");
+      if (!confirmPay) return;
+
+      try {
+        const res = await fetch('/api/user/pay-vps', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userid: currentUser.userid })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          alert("✅ " + data.message);
+          currentUser.fuel_balance = data.balance;
+          currentUser.vps_status = data.vps_status;
+          currentUser.vps_expires_at = data.vps_expires_at;
+          renderDashboardUser(currentUser);
+        } else {
+          alert("❌ " + (data.error || "Gagal memperpanjang sewa VPS"));
+        }
+      } catch (e) {
+        alert("Gagal menghubungi server.");
+      }
+    }
+
+    // FORGOT PASSWORD OTP
+    async function requestResetOTP() {
+      const email = document.getElementById('forgot-email').value;
+      if (!email) {
+        alert('Mohon masukkan email Anda.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          document.getElementById('forgot-step-1').style.display = 'none';
+          document.getElementById('forgot-step-2').style.display = 'flex';
+          if (data.demo_otp_code) {
+            document.getElementById('reset-otp').value = data.demo_otp_code;
+            document.getElementById('otp-alert-box').innerText = `✓ Kode OTP verifikasi (${data.demo_otp_code}) telah dikirim ke email ${email}`;
+          }
+        } else {
+          alert('❌ ' + (data.error || 'Email tidak ditemukan'));
+        }
+      } catch (e) {
+        alert('Gagal menghubungi server.');
+      }
+    }
+
+    // SUBMIT NEW PASSWORD
+    async function submitNewPassword() {
+      const email = document.getElementById('forgot-email').value;
+      const otp = document.getElementById('reset-otp').value;
+      const newPass = document.getElementById('reset-new-pass').value;
+
+      if (!otp || !newPass) {
+        alert('Mohon isi kode OTP dan Password baru.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp, new_password: newPass })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          alert('✅ Password berhasil direset! Silakan login dengan password baru.');
+          document.getElementById('login-id').value = email;
+          document.getElementById('login-pass').value = newPass;
+          showAuthScreen('screen-login');
+        } else {
+          alert('❌ ' + (data.error || 'Gagal reset password'));
+        }
+      } catch (e) {
+        alert('Gagal menghubungi server.');
+      }
+    }
+
+    function safeSetText(id, text) {
+      const el = document.getElementById(id);
+      if (el) el.innerText = text;
+    }
+
+    // RENDER USER DATA
+    function renderDashboardUser(u) {
+      if (!u) return;
+      safeSetText('d-name', u.name || 'Investor');
+      safeSetText('d-userid', u.userid || 'user');
+      safeSetText('d-rank', u.rank || "V1 PARTNER");
+      safeSetText('d-fuel-val', (u.fuel_balance || 0).toFixed(2) + ' USDT');
+      safeSetText('mine-fuel-val', (u.fuel_balance || 0).toFixed(2) + ' USDT');
+      safeSetText('team-ref-code', u.referral_code || (u.userid ? u.userid.toUpperCase() : 'ADMIN888'));
+      safeSetText('mine-ref-code', (u.referral_code || (u.userid ? u.userid.toUpperCase() : 'ADMIN888')) + ' ›');
+      
+      const avatarEl = document.getElementById('d-avatar');
+      if (avatarEl && u.name) {
+        avatarEl.innerText = u.name.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+      }
+
+      if (u.mt5_master) {
+        safeSetText('home-mt5-status', `Master #${u.mt5_master.login} ⇄ Slave #${u.mt5_slave ? u.mt5_slave.login : '-'}`);
+        safeSetText('home-dep-val', (u.mt5_master.balance || 2000).toLocaleString() + ' USDT');
+      }
+
+      if (u.vps_status) {
+        safeSetText('vps-status-badge', u.vps_status === 'ACTIVE' ? 'AKTIF' : 'EXPIRED');
+      }
+      if (u.vps_expires_at) {
+        safeSetText('vps-expiry-val', u.vps_expires_at);
+      }
+    }
+
+    // LOGOUT
+    function handleLogout() {
+      currentUser = null;
+      isReadOnlySession = false;
+      document.getElementById('readonly-notice').classList.remove('show');
+      showAuthScreen('screen-login');
+    }
+
+    function copyInviteLink() {
+      const code = currentUser ? (currentUser.referral_code || currentUser.userid.toUpperCase()) : "ADMIN888";
+      navigator.clipboard.writeText(`https://novahedgeglobalplatform.vercel.app/?ref=${code}`);
+      alert(`✅ Link Undangan Berhasil Disalin: https://novahedgeglobalplatform.vercel.app/?ref=${code}`);
+    }
+
+    function shareWhatsApp() {
+      const code = currentUser ? (currentUser.referral_code || currentUser.userid.toUpperCase()) : "ADMIN888";
+      const msg = encodeURIComponent(`Halo! Gabung sistem trading kuantitatif Nova Hedge otomatis tanpa titip dana menggunakan kode referral saya: ${code} di https://novahedgeglobalplatform.vercel.app/?ref=${code}`);
+      window.open("https://wa.me/?text=" + msg, "_blank");
+    }
+
+    // WALLET FUNCTIONS (PERSIS SESUAI SCREENSHOT)
+    let currentCryptoNetwork = 'BEP20';
+    const cryptoAddresses = {
+      'BEP20': '0x592b68bdD0775a1D85a73E320c2daB06a3369702F',
+      'TRC20': 'TX7QhR77sK9LpmbJ3bV2oZqFv65s8y99Nm'
+    };
+
+    function switchWalletMode(mode) {
+      if (mode === 'deposit') {
+        document.getElementById('wallet-view-deposit').style.display = 'flex';
+        document.getElementById('wallet-view-withdraw').style.display = 'none';
+        document.getElementById('wallet-tab-deposit').style.background = 'var(--moon-gold-gradient)';
+        document.getElementById('wallet-tab-deposit').style.color = '#000';
+        document.getElementById('wallet-tab-withdraw').style.background = 'transparent';
+        document.getElementById('wallet-tab-withdraw').style.color = 'var(--text-soft)';
+      } else {
+        document.getElementById('wallet-view-deposit').style.display = 'none';
+        document.getElementById('wallet-view-withdraw').style.display = 'flex';
+        document.getElementById('wallet-tab-withdraw').style.background = 'var(--moon-gold-gradient)';
+        document.getElementById('wallet-tab-withdraw').style.color = '#000';
+        document.getElementById('wallet-tab-deposit').style.background = 'transparent';
+        document.getElementById('wallet-tab-deposit').style.color = 'var(--text-soft)';
+      }
+    }
+
+    function selectNetwork(net) {
+      currentCryptoNetwork = net;
+      const addr = cryptoAddresses[net];
+      document.getElementById('wallet-address-text').innerText = addr;
+      document.getElementById('dep-network-label').innerText = net === 'BEP20' ? 'BEP20 (BSC)' : 'TRC20';
+      document.getElementById('wallet-qrcode').src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(addr)}`;
+
+      if (net === 'BEP20') {
+        document.getElementById('net-bep20').style.borderColor = 'var(--moon-gold)';
+        document.getElementById('net-bep20').style.color = 'var(--moon-gold)';
+        document.getElementById('net-trc20').style.borderColor = 'var(--border-line)';
+        document.getElementById('net-trc20').style.color = 'var(--text-soft)';
+      } else {
+        document.getElementById('net-trc20').style.borderColor = 'var(--moon-gold)';
+        document.getElementById('net-trc20').style.color = 'var(--moon-gold)';
+        document.getElementById('net-bep20').style.borderColor = 'var(--border-line)';
+        document.getElementById('net-bep20').style.color = 'var(--text-soft)';
+      }
+    }
+
+    let currentInvoiceExactAmount = "100.91";
+
+    function setDepositAmount(val) {
+      document.getElementById('custom-dep-amount').value = val;
+    }
+
+    function generateDepositInvoice() {
+      const baseAmount = parseFloat(document.getElementById('custom-dep-amount').value || 100);
+      if (isNaN(baseAmount) || baseAmount < 10) {
+        alert("Minimal deposit adalah 10 USDT.");
+        return;
+      }
+
+      const randomCents = Math.floor(10 + Math.random() * 89);
+      currentInvoiceExactAmount = `${baseAmount}.${randomCents}`;
+
+      const now = new Date();
+      const timeStr = now.toLocaleDateString("id-ID", { day: '2-digit', month: 'short' }) + ', ' + 
+                      now.toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' }).replace('.', ':');
+
+      document.getElementById('dep-nominal-header').innerText = `$${baseAmount.toFixed(2)}`;
+      document.getElementById('dep-time-header').innerText = timeStr;
+      document.getElementById('dep-exact-amount').innerText = `$${currentInvoiceExactAmount} USDT`;
+      document.getElementById('dep-exact-val').innerText = `$${currentInvoiceExactAmount}`;
+
+      document.getElementById('dep-step-input').style.display = 'none';
+      document.getElementById('dep-step-invoice').style.display = 'flex';
+    }
+
+    function backToDepositInput() {
+      document.getElementById('dep-step-invoice').style.display = 'none';
+      document.getElementById('dep-step-input').style.display = 'flex';
+    }
+
+    function copyExactAmount() {
+      navigator.clipboard.writeText(currentInvoiceExactAmount);
+      alert(`✅ Nominal Persis Disalin: ${currentInvoiceExactAmount} USDT`);
+    }
+
+    async function submitTxHash() {
+      if (isReadOnlySession) {
+        alert("🔒 Akses Dibatasi pada Mode Read-Only.");
+        return;
+      }
+      const hash = document.getElementById('tx-hash-input').value.trim();
+      if (!hash) {
+        alert("Mohon masukkan TX Hash bukti transfer Anda.");
+        return;
+      }
+      alert(`✅ TX Hash [${hash.substring(0, 16)}...] berhasil dikirim ke antrean verifikasi on-chain.`);
+      document.getElementById('tx-hash-input').value = "";
+    }
+
+    function submitWithdraw() {
+      if (isReadOnlySession) {
+        alert("🔒 Akses Dibatasi pada Mode Read-Only.");
+        return;
+      }
+      const amount = document.getElementById('wd-amount').value;
+      const addr = document.getElementById('wd-address').value;
+      if (!addr) {
+        alert("Mohon masukkan alamat dompet penarikan Anda.");
+        return;
+      }
+      alert(`✅ Pengajuan penarikan ${amount} USDT telah dikirim dan sedang diproses.`);
+      closeModal('modal-fuel-topup');
+    }
+
+    // SUBMIT BINDING MT5 (DETIL LENGKAP MASTER & SLAVE SESUAI LAMPIRAN)
+    async function submitBindMT5() {
+      if (isReadOnlySession) {
+        alert("🔒 Akses Dibatasi pada Mode Read-Only.");
+        return;
+      }
+
+      const m_login = document.getElementById('bind-master-login').value;
+      const m_broker = document.getElementById('bind-master-broker').value;
+      const m_pass = document.getElementById('bind-master-pass').value;
+      const m_modal = document.getElementById('bind-master-modal').value;
+
+      const s_login = document.getElementById('bind-slave-login').value;
+      const s_broker = document.getElementById('bind-slave-broker').value;
+      const s_pass = document.getElementById('bind-slave-pass').value;
+      const s_modal = document.getElementById('bind-slave-modal').value;
+
+      if (!m_login || !s_login) {
+        alert('Mohon isi ID Meta (Login MT5) untuk Akun Master dan Slave.');
+        return;
+      }
+
+      await fetch('/api/user/bind-mt5', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userid: currentUser.userid, 
+          master_login: m_login, 
+          master_broker: m_broker,
+          master_pass: m_pass,
+          deposit: m_modal,
+          slave_login: s_login,
+          slave_broker: s_broker,
+          slave_pass: s_pass
+        })
+      });
+
+      currentUser.mt5_master = { login: m_login, balance: parseFloat(m_modal), broker: m_broker };
+      currentUser.mt5_slave = { login: s_login, balance: parseFloat(s_modal), broker: s_broker };
+      renderDashboardUser(currentUser);
+      closeModal('modal-bind-mt5');
+      alert('🎉 Akun Dual-MT5 (Master & Slave) berhasil di-submit dan sender EA akan terkoneksi otomatis!');
+    }
+
+    // SHOW REVENUE DETAIL BREAKDOWN POPUP
+    function showRevenueDetail(date, gross, net, fee, rebate, vol, masterProfit, slaveHedge) {
+      document.getElementById('rd-date-subtitle').innerText = date + ' · Rincian Siklus Selesai';
+      document.getElementById('rd-gross-val').innerText = '+' + gross + ' USDT';
+      document.getElementById('rd-vol-val').innerText = vol + ' Lot';
+      document.getElementById('rd-master-profit').innerText = '+' + masterProfit + ' USDT';
+      document.getElementById('rd-slave-hedge').innerText = slaveHedge + ' USDT';
+      document.getElementById('rd-investor-net').innerText = '+' + net + ' USDT';
+      document.getElementById('rd-fuel-fee').innerText = '-' + fee + ' USDT';
+      document.getElementById('rd-rebate-val').innerText = '+' + rebate + ' USDT';
+      document.getElementById('modal-revenue-detail').classList.add('open');
+    }
+
+    // AUTO-DETECT REFERRAL LINK (?ref=CODE)
+    window.addEventListener('DOMContentLoaded', () => {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const refParam = urlParams.get('ref');
+        if (refParam) {
+          const sponsorInput = document.getElementById('reg-sponsor');
+          if (sponsorInput) {
+            sponsorInput.value = refParam.trim().toUpperCase();
+          }
+          showAuthScreen('screen-register');
+          console.log(`🔗 Auto-detected referral code from URL: ${refParam}`);
+        }
+      } catch (e) {}
+    });
+  </script>
+</body>
+</html>
