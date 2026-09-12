@@ -10,6 +10,9 @@ echo   DUAL-MT5 BONUS HEDGING BOT - CLOUD WEB DASHBOARD (v1.24)
 echo ================================================================
 echo.
 
+:: Otomatis buka port 3000 di Windows Firewall (agar bisa diakses dari HP / Laptop)
+netsh advfirewall firewall add rule name="Web Dashboard Port 3000" dir=in action=allow protocol=TCP localport=3000 >nul 2>nul
+
 :: Cek apakah Node.js sudah terinstall
 where node >nul 2>nul
 if %errorlevel% neq 0 (
@@ -26,11 +29,13 @@ if %errorlevel% neq 0 (
 )
 
 echo [OK] Node.js terdeteksi!
+echo [OK] Port 3000 Firewall Windows otomatis diizinkan!
 echo [*] Menjalankan Web Dashboard Server di Port 3000...
 echo.
 echo ----------------------------------------------------------------
-echo   Link Akses Lokal di VPS : http://localhost:3000
-echo   Link Telemetri MT5      : http://localhost:3000/api/telemetry
+echo   Akses dari dalam VPS : http://localhost:3000
+echo   Akses dari Laptop/HP : http://[IP-VPS-ANDA]:3000
+echo   Telemetri MT5        : http://localhost:3000/api/telemetry
 echo ----------------------------------------------------------------
 echo.
 echo Biarkan jendela ini tetap TERBUKA agar dashboard selalu online 24/7.
