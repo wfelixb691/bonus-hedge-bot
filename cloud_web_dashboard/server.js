@@ -512,7 +512,7 @@ const server = http.createServer((req, res) => {
   res.end('Not Found');
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log('====================================================');
   console.log(` 🚀 CLOUD WEB DASHBOARD SERVER RUNNING (v1.24)!`);
   console.log(` 👉 Server Port          : ${PORT}`);
