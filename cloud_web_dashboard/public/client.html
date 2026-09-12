@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Laporan Portofolio Investasi | Private Wealth</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #070d19;
+      --card-bg: #0f172a;
+      --card-border: #1e293b;
+      --card-highlight: #1e2942;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --emerald: #10b981;
+      --emerald-bg: rgba(16, 185, 129, 0.12);
+      --gold: #f59e0b;
+      --gold-bg: rgba(245, 158, 11, 0.12);
+      --blue: #3b82f6;
+      --blue-bg: rgba(59, 130, 246, 0.15);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+    body { background: var(--bg); color: var(--text-main); min-height: 100vh; padding: 20px 16px; -webkit-tap-highlight-color: transparent; }
+    .wrapper { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+    /* Top Private Wealth Navbar */
+    .top-nav {
+      background: linear-gradient(135deg, #0f172a 0%, #172554 100%);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 16px;
+      padding: 16px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .brand-group { display: flex; align-items: center; gap: 12px; }
+    .brand-emblem {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; color: #fff; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+    }
+    .brand-info h1 { font-size: 17px; font-weight: 800; letter-spacing: -0.2px; color: #fff; }
+    .brand-info p { font-size: 11px; color: #93c5fd; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .nav-links { display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 3px; }
+    .nav-btn { color: var(--text-muted); text-decoration: none; padding: 6px 14px; font-size: 11px; font-weight: 700; border-radius: 6px; transition: 0.15s; }
+    .nav-btn:hover { color: #fff; }
+    .nav-btn.active { background: var(--blue); color: #fff; }
+
+    /* Client Welcome & Profile Bar */
+    .client-header {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 18px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+    .client-profile { display: flex; align-items: center; gap: 14px; }
+    .avatar-circle {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: linear-gradient(135deg, #1e293b, #334155);
+      border: 2px solid var(--blue);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .client-title { font-size: 18px; font-weight: 800; color: #fff; }
+    .client-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    .acc-picker-wrap { display: flex; align-items: center; gap: 10px; }
+    .acc-picker {
+      background: #070d19;
+      border: 1px solid var(--card-border);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Main Asset Value Hero Card */
+    .hero-portfolio-card {
+      background: linear-gradient(180deg, #0f172a 0%, #111c35 100%);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 20px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    .hero-portfolio-card::before {
+      content: ''; position: absolute; top: -50px; right: -50px;
+      width: 200px; height: 200px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-top-row { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+    .hero-label { font-size: 12px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.8px; }
+    .hero-main-value { font-size: 38px; font-weight: 900; color: #fff; font-family: 'JetBrains Mono', monospace; margin: 4px 0; }
+    .hero-sub-value { font-size: 16px; color: #60a5fa; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+
+    .hero-badge-group { display: flex; align-items: center; gap: 10px; }
+    .roi-pill {
+      background: var(--emerald-bg);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: var(--emerald);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Sub KPI 3 Columns */
+    .hero-sub-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 18px;
+    }
+    .sub-kpi-item { display: flex; flex-direction: column; gap: 3px; }
+    .sub-kpi-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+    .sub-kpi-val { font-size: 17px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+
+    /* Period Filter & Profit Returns */
+    .returns-section {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .returns-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .returns-title { font-size: 15px; font-weight: 800; color: #fff; }
+
+    .period-tabs { display: flex; background: #070d19; border: 1px solid var(--card-border); border-radius: 10px; padding: 3px; gap: 3px; }
+    .period-tab {
+      background: transparent; border: none; color: var(--text-muted);
+      padding: 7px 14px; font-size: 12px; font-weight: 700; border-radius: 8px; cursor: pointer; transition: 0.15s;
+    }
+    .period-tab.active { background: var(--blue); color: #fff; }
+
+    /* Returns 2-Card Showcase */
+    .returns-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 640px) { .returns-grid { grid-template-columns: 1fr; } }
+    .return-box {
+      background: #070d19;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .return-box-title { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+    .return-box-val { font-size: 24px; font-weight: 900; font-family: 'JetBrains Mono', monospace; }
+    .return-box-sub { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+
+    /* Payout Split Box */
+    .payout-split-card {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+    }
+    .payout-left { display: flex; flex-direction: column; gap: 3px; }
+    .payout-left h3 { font-size: 14px; font-weight: 800; color: #fff; }
+    .payout-left p { font-size: 12px; color: var(--text-muted); }
+    .payout-right { text-align: right; }
+    .payout-amount { font-size: 22px; font-weight: 900; color: var(--emerald); font-family: 'JetBrains Mono', monospace; }
+    .payout-badge { font-size: 10px; font-weight: 800; background: var(--emerald-bg); color: var(--emerald); border: 1px solid rgba(16,185,129,0.4); padding: 3px 8px; border-radius: 6px; }
+
+    /* Equity Growth Chart */
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .chart-title-row { display: flex; justify-content: space-between; align-items: center; }
+    .chart-title { font-size: 14px; font-weight: 800; color: #fff; }
+    .svg-chart-wrap { width: 100%; height: 160px; overflow: hidden; }
+
+    /* Payout History Table */
+    .history-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .history-table th { text-align: left; padding: 10px; color: var(--text-muted); font-weight: 700; border-bottom: 1px solid var(--card-border); font-size: 11px; text-transform: uppercase; }
+    .history-table td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-family: 'JetBrains Mono', monospace; }
+
+    /* Trust & Security Footer */
+    .trust-footer {
+      background: #070d19;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #94a3b8;
+    }
+    .trust-icon { font-size: 24px; }
+
+    .green { color: var(--emerald); }
+    .red { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    
+    <!-- Top Private Wealth Navbar -->
+    <header class="top-nav">
+      <div class="brand-group">
+        <div class="brand-emblem">🏆</div>
+        <div class="brand-info">
+          <h1>GOLD HEDGE PRIVATE WEALTH</h1>
+          <p>Laporan Portofolio & Keuangan Investor Mandiri</p>
+        </div>
+      </div>
+
+      <!-- Navigation Switcher -->
+      <nav class="nav-links">
+        <a href="/" class="nav-btn">👑 Manager Console</a>
+        <a href="/client" class="nav-btn active">👤 Investor Portal</a>
+        <a href="/referral" class="nav-btn">🤝 Referral IB</a>
+      </nav>
+    </header>
+
+    <!-- Client Profile Bar -->
+    <section class="client-header">
+      <div class="client-profile">
+        <div class="avatar-circle">👤</div>
+        <div>
+          <div class="client-title" id="client-name">Memuat Nama Investor...</div>
+          <div class="client-subtitle" id="client-reg-bank">Rekening Terdaftar: BCA 8010293841</div>
+        </div>
+      </div>
+
+      <div class="acc-picker-wrap">
+        <span style="font-size: 11px; font-weight: 700; color: var(--text-muted);">PILIH PORTOFOLIO:</span>
+        <select id="acc-select" class="acc-picker" onchange="changeAccount(this.value)">
+          <option value="">Memuat...</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Main Portfolio Asset Hero Card -->
+    <main class="hero-portfolio-card">
+      <div class="hero-top-row">
+        <div>
+          <div class="hero-label">TOTAL NILAI PORTOFOLIO SAAT INI</div>
+          <div class="hero-main-value" id="val-rupiah">Rp0</div>
+          <div class="hero-sub-value" id="val-usd">$0.00 USD</div>
+        </div>
+
+        <div class="hero-badge-group">
+          <div class="roi-pill">
+            <span>▲</span>
+            <span id="roi-text">+0.0% ROI</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sub KPI Strip -->
+      <div class="hero-sub-grid">
+        <div class="sub-kpi-item">
+          <div class="sub-kpi-label">Modal Disetor (Awal)</div>
+          <div class="sub-kpi-val" id="val-deposit">$0.00</div>
+          <span style="font-size: 11px; color: var(--text-muted);" id="val-deposit-rp">Rp0</span>
+        </div>
+        <div class="sub-kpi-item">
+          <div class="sub-kpi-label">Total Keuntungan Bersih</div>
+          <div class="sub-kpi-val green" id="val-total-gain">+$0.00</div>
+          <span style="font-size: 11px; color: var(--emerald);" id="val-total-gain-rp">+Rp0</span>
+        </div>
+        <div class="sub-kpi-item">
+          <div class="sub-kpi-label">Status Portofolio</div>
+          <div class="sub-kpi-val" style="color: var(--emerald); font-size: 14px; font-family: 'Plus Jakarta Sans', sans-serif;">
+            ● Aktif Menghasilkan
+          </div>
+          <span style="font-size: 11px; color: var(--text-muted);">Low-Risk Auto-Hedge</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Returns & Profit Sharing Section -->
+    <section class="returns-section">
+      <div class="returns-header">
+        <div class="returns-title">KEUNTUNGAN BERSIH YANG DIHASILKAN</div>
+        
+        <div class="period-tabs">
+          <button class="period-tab active" onclick="setPeriod('today')">Hari Ini</button>
+          <button class="period-tab" onclick="setPeriod('week')">Minggu Ini</button>
+          <button class="period-tab" onclick="setPeriod('month')">Bulan Ini</button>
+          <button class="period-tab" onclick="setPeriod('all_time')">Semua Total</button>
+        </div>
+      </div>
+
+      <!-- 2 Return Boxes -->
+      <div class="returns-grid">
+        <div class="return-box">
+          <div class="return-box-title" id="return-box-label">KEUNTUNGAN BERSIH (HARI INI)</div>
+          <div class="return-box-val green" id="period-profit-rp">+Rp0</div>
+          <div class="return-box-sub" id="period-profit-usd">+$0.00 USD</div>
+        </div>
+
+        <div class="return-box">
+          <div class="return-box-title">FLOATING SIKLUS BERJALAN</div>
+          <div class="return-box-val" id="floating-rp">Rp0</div>
+          <div class="return-box-sub" id="floating-usd">$0.00 USD (Terlindung Hedging)</div>
+        </div>
+      </div>
+
+      <!-- Payout Split Card -->
+      <div class="payout-split-card">
+        <div class="payout-left">
+          <h3>Hak Bersih Transfer Investor (70% Bagi Hasil)</h3>
+          <p>Setelah dipotong 30% biaya pengelolaan sistem robot. Ditransfer langsung ke rekening bank Anda.</p>
+        </div>
+        <div class="payout-right">
+          <div class="payout-amount" id="client-share-amount">+Rp0</div>
+          <span class="payout-badge">SIAP DICAIKAN</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Equity Growth Curve Chart (SVG) -->
+    <section class="chart-card">
+      <div class="chart-title-row">
+        <div class="chart-title">GRAFIK KURVA PERTUMBUHAN MODAL (EQUITY CURVE)</div>
+        <span style="font-size: 11px; font-weight: 700; color: var(--emerald);">TREN: STABIL NAIK KONSISTEN</span>
+      </div>
+      <div class="svg-chart-wrap" id="chart-container">
+        <!-- Injected SVG Chart -->
+      </div>
+    </section>
+
+    <!-- Payout / Dividend History Table -->
+    <section class="history-card">
+      <div class="returns-title">RIWAYAT TRANSFER BAGI HASIL KE REKENING ANDA</div>
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Nominal Bersih (Rp)</th>
+            <th>Nominal ($)</th>
+            <th>Rekening Tujuan</th>
+            <th>Status Transfer</th>
+          </tr>
+        </thead>
+        <tbody id="history-body">
+          <!-- Injected via JS -->
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Trust & Safety Footer -->
+    <footer class="trust-footer">
+      <div class="trust-icon">🛡️</div>
+      <div>
+        <strong style="color: #fff;">Prinsip Keamanan Modal Private Wealth:</strong><br>
+        Portofolio Anda dikelola menggunakan strategi <em>Dual Hedging Matematika</em>. Sistem tidak pernah membiarkan posisi terbuka tanpa lindung nilai penyeimbang. Risiko pasar dan fluktuasi tajam dinetralisir secara otomatis, menjamin modal Anda aman dari risiko Margin Call.
+      </div>
+    </footer>
+
+  </div>
+
+  <script>
+    const USD_RATE = 17745;
+    let currentLogin = new URLSearchParams(window.location.search).get('acc') || '';
+    let selectedPeriod = 'today';
+    let clientData = null;
+
+    function formatNumber(num) {
+      return (num || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatRupiah(num) {
+      const abs = Math.abs(num || 0);
+      const sign = num < 0 ? '-' : '';
+      return sign + 'Rp' + Math.round(abs).toLocaleString('id-ID');
+    }
+
+    async function loadAccounts() {
+      try {
+        const res = await fetch('/api/accounts');
+        const data = await res.json();
+        const accs = data.accounts || [];
+        const sel = document.getElementById('acc-select');
+
+        if (accs.length === 0) {
+          sel.innerHTML = '<option value="">Belum ada portofolio</option>';
+          return;
+        }
+
+        sel.innerHTML = accs.map(a => 
+          `<option value="${a.login}" ${a.login == currentLogin ? 'selected' : ''}>${a.client_name} (#${a.login})</option>`
+        ).join('');
+
+        if (!currentLogin && accs.length > 0) {
+          currentLogin = accs[0].login;
+          sel.value = currentLogin;
+        }
+
+        fetchClientData();
+      } catch (e) {
+        console.error("Failed to load accounts:", e);
+      }
+    }
+
+    function changeAccount(login) {
+      currentLogin = login;
+      window.history.replaceState(null, '', `?acc=${login}`);
+      fetchClientData();
+    }
+
+    function setPeriod(p) {
+      selectedPeriod = p;
+      document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
+      const idx = { today: 0, week: 1, month: 2, all_time: 3 }[p];
+      document.querySelectorAll('.period-tab')[idx]?.classList.add('active');
+
+      const labels = {
+        today: 'KEUNTUNGAN BERSIH (HARI INI)',
+        week: 'KEUNTUNGAN BERSIH (MINGGU INI)',
+        month: 'KEUNTUNGAN BERSIH (BULAN INI)',
+        all_time: 'KEUNTUNGAN BERSIH (SEMUA TOTAL)'
+      };
+      document.getElementById('return-box-label').textContent = labels[p];
+
+      if (clientData) renderUI(clientData);
+    }
+
+    async function fetchClientData() {
+      if (!currentLogin) return;
+      try {
+        const res = await fetch(`/api/client/${currentLogin}`);
+        if (!res.ok) throw new Error("Offline");
+        clientData = await res.json();
+        renderUI(clientData);
+      } catch (err) {
+        console.error("Error fetching client data:", err);
+      }
+    }
+
+    function renderUI(d) {
+      // Profile
+      document.getElementById('client-name').textContent = d.client_name;
+      document.getElementById('client-reg-bank').textContent = `Rekening Terdaftar: ${d.registered_bank}`;
+
+      // Total Asset
+      const totalEqUSD = d.total_combined_equity || 0;
+      const totalEqRP = totalEqUSD * USD_RATE;
+      document.getElementById('val-rupiah').textContent = formatRupiah(totalEqRP);
+      document.getElementById('val-usd').textContent = `$${formatNumber(totalEqUSD)} USD`;
+
+      // ROI %
+      document.getElementById('roi-text').textContent = `+${d.roi_percent}% ROI Sejak Awal`;
+
+      // Sub KPIs
+      document.getElementById('val-deposit').textContent = `$${formatNumber(d.initial_deposit)}`;
+      document.getElementById('val-deposit-rp').textContent = formatRupiah((d.initial_deposit || 0) * USD_RATE);
+
+      const totalGain = d.profit_all_time || 0;
+      document.getElementById('val-total-gain').textContent = `+$${formatNumber(totalGain)}`;
+      document.getElementById('val-total-gain-rp').textContent = `+${formatRupiah(totalGain * USD_RATE)}`;
+
+      // Period Returns
+      const pVal = selectedPeriod === 'today' ? d.profit_today :
+                   selectedPeriod === 'week' ? d.profit_week :
+                   selectedPeriod === 'month' ? d.profit_month : d.profit_all_time;
+      const pSign = (pVal || 0) >= 0 ? '+' : '';
+      const pRP = (pVal || 0) * USD_RATE;
+
+      document.getElementById('period-profit-rp').textContent = `${pSign}${formatRupiah(pRP)}`;
+      document.getElementById('period-profit-usd').textContent = `${pSign}$${formatNumber(pVal)} USD`;
+
+      // Floating
+      const netF = d.net_floating || 0;
+      const netFSign = netF >= 0 ? '+' : '';
+      const netFEl = document.getElementById('floating-rp');
+      netFEl.textContent = `${netFSign}${formatRupiah(netF * USD_RATE)}`;
+      netFEl.className = 'return-box-val ' + (netF >= 0 ? 'green' : 'red');
+      document.getElementById('floating-usd').textContent = `${netFSign}$${formatNumber(netF)} USD (Terlindung Hedging)`;
+
+      // Client Share 70%
+      const shareVal = (pVal || 0) * (d.client_share_pct / 100.0);
+      document.getElementById('client-share-amount').textContent = `+${formatRupiah(shareVal * USD_RATE)}`;
+
+      // Render Payout History Table
+      const hbody = document.getElementById('history-body');
+      const hist = d.payout_history || [];
+      hbody.innerHTML = hist.map(h => `
+        <tr>
+          <td style="color: #fff; font-weight: 600;">${h.date}</td>
+          <td style="color: var(--emerald); font-weight: 800;">+${formatRupiah(h.amount_rp)}</td>
+          <td style="color: var(--text-muted);">+$${formatNumber(h.amount_usd)}</td>
+          <td style="color: #60a5fa;">${h.bank}</td>
+          <td><span style="background: var(--emerald-bg); color: var(--emerald); padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;">🟢 ${h.status}</span></td>
+        </tr>
+      `).join('');
+
+      // Render Smooth SVG Chart
+      renderChart(d.chart_data || []);
+    }
+
+    function renderChart(points) {
+      const container = document.getElementById('chart-container');
+      if (!points || points.length === 0) return;
+
+      const w = 900;
+      const h = 140;
+      const padX = 40;
+      const padY = 20;
+
+      const vals = points.map(p => p.equity);
+      const minV = Math.min(...vals) * 0.98;
+      const maxV = Math.max(...vals) * 1.01;
+
+      const rangeX = (w - padX * 2) / (points.length - 1);
+      const rangeY = (h - padY * 2) / (maxV - minV || 1);
+
+      const coords = points.map((p, i) => {
+        const x = padX + i * rangeX;
+        const y = h - padY - (p.equity - minV) * rangeY;
+        return { x, y, eq: p.equity, date: p.date };
+      });
+
+      // SVG Path
+      let pathD = `M ${coords[0].x} ${coords[0].y}`;
+      for (let i = 1; i < coords.length; i++) {
+        // Smooth bezier curve
+        const prev = coords[i - 1];
+        const curr = coords[i];
+        const cp1x = prev.x + (curr.x - prev.x) / 2;
+        const cp1y = prev.y;
+        const cp2x = prev.x + (curr.x - prev.x) / 2;
+        const cp2y = curr.y;
+        pathD += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
+      }
+
+      const areaD = `${pathD} L ${coords[coords.length-1].x} ${h} L ${coords[0].x} ${h} Z`;
+
+      let circles = coords.map(c => 
+        `<circle cx="${c.x}" cy="${c.y}" r="4" fill="#10b981" stroke="#0f172a" stroke-width="2"/>
+         <text x="${c.x}" y="${c.y - 10}" fill="#93c5fd" font-size="10" font-weight="700" font-family="JetBrains Mono" text-anchor="middle">$${formatNumber(c.eq)}</text>
+         <text x="${c.x}" y="${h - 4}" fill="#64748b" font-size="10" font-family="Plus Jakarta Sans" text-anchor="middle">${c.date}</text>`
+      ).join('');
+
+      container.innerHTML = `
+        <svg viewBox="0 0 ${w} ${h}" style="width: 100%; height: 100%; overflow: visible;">
+          <defs>
+            <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#10b981" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+            </linearGradient>
+          </defs>
+          <path d="${areaD}" fill="url(#chartGrad)" />
+          <path d="${pathD}" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" />
+          ${circles}
+        </svg>
+      `;
+    }
+
+    loadAccounts();
+    setInterval(fetchClientData, 2000);
+  </script>
+</body>
+</html>

@@ -5,24 +5,23 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.22"
+#property version   "1.24"
 #property strict
 
 #include <Trade\Trade.mqh>
 
-//--- Input Parameters
+//--- Input Parameters (Simplified & Essential Only)
 input group "=== IDENTITAS PASANGAN TRADING (ANTI-TABRAKAN) ==="
 input int      InpPairID            = 1;             // Pair Group ID (Samakan dengan Master: 1, 2, 3, dst)
 
 input group "=== SLAVE HEDGING PARAMETERS ==="
-input string   InpSymbol            = "XAUUSD";      // Trading Symbol
 input double   InpLotMultiplier     = 1.10;          // Lot Multiplier (e.g. 0.15 Master -> 0.17 Slave)
-input int      InpSlippage          = 50;            // Slippage Points
 input double   InpMinBonusCredit    = 100.0;         // Min Bonus Credit $ Required to Start (0 = Disabled)
-input bool     InpHarvestOnMasterMC = true;          // Auto Close Slave if Master hits Margin Call/StopOut
 
-input group "=== ADVANCED TIMING SETTINGS ==="
-input int      InpTimerMS           = 50;            // Sync Interval in ms
+//--- Internal Engine Constants (Fixed for Optimal Stability & Zero User Error)
+const int      TIMER_MS             = 50;            // Synchronization Interval in ms
+const int      SLIPPAGE_POINTS      = 50;            // Slippage Points Tolerance
+const double   MAX_SPREAD_POINTS    = 60.0;          // Max Spread Points for Flash Debounce
 
 //--- Resolved Runtime Variables (Generated Automatically from InpPairID)
 ulong          m_magic              = 888991;
@@ -93,6 +92,7 @@ void   SendCommandToMaster(string cmd);
 void   CheckIncomingCommands();
 void   UpdateDashboard(double slave_profit, double combined_net_profit);
 void   UpdateDashboardOffline();
+bool   IsSlaveHedgePosition(ulong ticket);
 bool   IsMasterTimedOut();
 
 //+------------------------------------------------------------------+
@@ -109,11 +109,10 @@ void DetectCommentLoss()
    for(int s = PositionsTotal() - 1; s >= 0; s--)
    {
       ulong s_ticket = PositionGetTicket(s);
-      if(s_ticket > 0 && PositionGetInteger(POSITION_MAGIC) == (long)m_magic
-         && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0))
+      if(IsSlaveHedgePosition(s_ticket))
       {
          mine++;
-         if(StringFind(PositionGetString(POSITION_COMMENT), m_comment_prefix) == 0)
+         if(StringFind(PositionGetString(POSITION_COMMENT), m_comment_prefix) >= 0)
             tagged++;
       }
    }
@@ -131,6 +130,17 @@ void DetectCommentLoss()
       m_comments_lost = false;
       Print("✅ [COMMENT-LOSS MODE OFF] Tag comment terdeteksi lagi — kembali ke pencocokan per-tiket.");
    }
+}
+
+bool IsSlaveHedgePosition(ulong ticket)
+{
+   if(ticket <= 0) return false;
+   if(!PositionSelectByTicket(ticket)) return false;
+   string pos_sym = PositionGetString(POSITION_SYMBOL);
+   if(StringFind(pos_sym, "XAU", 0) < 0 && StringFind(pos_sym, "xau", 0) < 0 &&
+      StringCompare(pos_sym, m_symbol, false) != 0 && StringCompare(pos_sym, _Symbol, false) != 0)
+      return false;
+   return true; // Any Gold position on this dedicated Slave terminal belongs to this hedge
 }
 
 void InitPairConfiguration()
@@ -153,26 +163,29 @@ int OnInit()
 {
    InitPairConfiguration();
 
-   m_symbol = (InpSymbol == "" || InpSymbol == "0") ? _Symbol : InpSymbol;
-   if(!SymbolSelect(m_symbol, true)) m_symbol = _Symbol;
+   m_symbol = _Symbol;
 
    m_point  = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
    m_digits = (int)SymbolInfoInteger(m_symbol, SYMBOL_DIGITS);
    if(m_point <= 0) m_point = 0.01;
 
    m_trade.SetExpertMagicNumber(m_magic);
-   m_trade.SetDeviationInPoints(InpSlippage);
+   m_trade.SetDeviationInPoints(SLIPPAGE_POINTS);
    m_trade.SetTypeFillingBySymbol(m_symbol);
 
-   EventSetMillisecondTimer(InpTimerMS);
+   EventSetMillisecondTimer(TIMER_MS);
    m_last_order_open_time  = TimeCurrent();
    m_last_order_close_time = 0;
    m_rapid_close_counter   = 0;
    m_circuit_breaker_until = 0;
    ArrayResize(m_missing_tickets, 0);
 
-   Print("🟢 [BonusHedge_Slave v1.22] Initialized on ", m_symbol,
+   Print("🟢 [BonusHedge_Slave v1.24] Initialized on ", m_symbol,
          " (Pair ID: #", InpPairID, ", Magic: ", m_magic, ", Mult: ", DoubleToString(InpLotMultiplier, 2), "x)");
+
+   // Set Chart Foreground Text to Bright Yellow for maximum crisp readability
+   ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);
+
    return(INIT_SUCCEEDED);
 }
 
@@ -183,6 +196,7 @@ void OnDeinit(const int reason)
 {
    EventKillTimer();
    FileDelete(m_slave_file, FILE_COMMON);
+   ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrWhite);
    Comment("");
 }
 
@@ -225,7 +239,7 @@ void OnTimer()
    double combined_net_profit = m_master_profit + slave_profit;
 
    // 5. Check if Master was liquidated / hit MC -> Harvest Slave Profit immediately!
-   if(InpHarvestOnMasterMC && CheckMasterLiquidationHarvest())
+   if(CheckMasterLiquidationHarvest())
       return;
 
    // 6. Sync Open: Hedge any new Master position on Slave (guarded by closing lock)
@@ -255,7 +269,7 @@ void BroadcastSlaveState()
    for(int s = PositionsTotal() - 1; s >= 0; s--)
    {
       ulong ticket = PositionGetTicket(s);
-      if(ticket > 0 && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0) && PositionGetInteger(POSITION_MAGIC) == (long)m_magic)
+      if(IsSlaveHedgePosition(ticket))
       {
          ArrayResize(tickets,  count + 1);
          ArrayResize(types,    count + 1);
@@ -281,11 +295,12 @@ void BroadcastSlaveState()
    static long s_slave_counter = 0;
    s_slave_counter++;
    FileWriteLong(file_handle, 0x42484246);       // magic "BHBF"
-   FileWriteLong(file_handle, 2);                // protocol version
+   FileWriteLong(file_handle, 3);                // protocol version 3 (includes credit)
    FileWriteLong(file_handle, s_slave_counter);  // heartbeat counter
    FileWriteLong(file_handle, AccountInfoInteger(ACCOUNT_LOGIN));
    FileWriteDouble(file_handle, AccountInfoDouble(ACCOUNT_EQUITY));
    FileWriteDouble(file_handle, AccountInfoDouble(ACCOUNT_BALANCE));
+   FileWriteDouble(file_handle, AccountInfoDouble(ACCOUNT_CREDIT));
 
    double reported_free_margin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
    double reported_margin_lvl  = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
@@ -503,6 +518,12 @@ bool CheckMasterLiquidationHarvest()
 void SyncOpenPositions()
 {
    if(!m_master_online || m_master_pos_count == 0) return;
+
+   // WEEKEND / MARKET CLOSED LOCK:
+   MqlDateTime dt_loc;
+   TimeToStruct(TimeLocal(), dt_loc);
+   if(dt_loc.day_of_week == 0 || dt_loc.day_of_week == 6) return; // Total quiet on weekends!
+
    if(TimeCurrent() < m_circuit_breaker_until) return;
    if(TimeCurrent() < m_closing_lock_until) return;
    if(TimeCurrent() - m_last_order_close_time < 10) return; // 10s cooldown after close
@@ -517,6 +538,23 @@ void SyncOpenPositions()
       return; // Hold off, bonus credit belum masuk
    }
 
+   // SPREAD FLASH DEBOUNCE: Jika spread Slave sedang melompat liar (> 2.5x batas normal),
+   // tunggu hingga 2.5 detik agar tick spread mereda sebelum menembak order hedge.
+   long slave_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
+   static ulong s_slave_spread_wait = 0;
+   if(MAX_SPREAD_POINTS > 0 && slave_spread > (long)(MAX_SPREAD_POINTS * 2.5))
+   {
+      if(s_slave_spread_wait == 0) s_slave_spread_wait = GetTickCount64();
+      if(GetTickCount64() - s_slave_spread_wait < 2500)
+      {
+         return; // Tunggu sejenak agar flash-spread broker mereda
+      }
+   }
+   else
+   {
+      s_slave_spread_wait = 0;
+   }
+
    // SAFETY CAP: Jika jumlah posisi HEDGE Slave sendiri (magic+symbol ini)
    // sudah sama atau melebihi posisi Master, DILARANG membuka hedge baru
    // (mencegah over-hedge). PENTING: tidak boleh pakai PositionsTotal() mentah —
@@ -526,9 +564,7 @@ void SyncOpenPositions()
    for(int c = PositionsTotal() - 1; c >= 0; c--)
    {
       ulong c_ticket = PositionGetTicket(c);
-      if(c_ticket > 0
-         && PositionGetInteger(POSITION_MAGIC) == (long)m_magic
-         && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0))
+      if(IsSlaveHedgePosition(c_ticket))
          my_hedge_count++;
    }
    if(my_hedge_count >= m_master_pos_count)
@@ -563,12 +599,14 @@ void SyncOpenPositions()
          for(int s = PositionsTotal() - 1; s >= 0; s--)
          {
             ulong s_ticket = PositionGetTicket(s);
-            if(s_ticket > 0 && PositionGetInteger(POSITION_MAGIC) == (long)m_magic
-               && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-               && PositionGetString(POSITION_COMMENT) == expected_comment)
+            if(IsSlaveHedgePosition(s_ticket))
             {
-               already_hedged = true;
-               break;
+               string cmt = PositionGetString(POSITION_COMMENT);
+               if(cmt == expected_comment || (StringFind(cmt, "CT#") < 0 && MathAbs(PositionGetDouble(POSITION_VOLUME) - want_lot) < 0.005))
+               {
+                  already_hedged = true;
+                  break;
+               }
             }
          }
       }
@@ -590,8 +628,7 @@ void SyncOpenPositions()
          for(int s = PositionsTotal() - 1; s >= 0; s--)
          {
             ulong s_ticket = PositionGetTicket(s);
-            if(s_ticket > 0 && PositionGetInteger(POSITION_MAGIC) == (long)m_magic
-               && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
+            if(IsSlaveHedgePosition(s_ticket)
                && (int)PositionGetInteger(POSITION_TYPE) == want_type
                && MathAbs(PositionGetDouble(POSITION_VOLUME) - want_lot) < 0.005)
                have_count++;
@@ -601,6 +638,14 @@ void SyncOpenPositions()
 
       if(!already_hedged)
       {
+         // Weekend / Market Closed Protection:
+         MqlDateTime dt_cur;
+         TimeToStruct(TimeCurrent(), dt_cur);
+         if(dt_cur.day_of_week == 0 || dt_cur.day_of_week == 6)
+         {
+            return; // Market closed on weekend, do not attempt to send orders!
+         }
+
          double slave_lot = want_lot;
 
          // ATOMIC IN-FLIGHT LOCK: Kunci tiket sebelum menembak order ke broker agar tidak bisa terjadi order kembar!
@@ -626,11 +671,15 @@ void SyncOpenPositions()
          {
             s_last_hedged_master_ticket = 0;
             s_last_hedged_tick_ms       = 0;
-            // CRITICAL ROLLBACK: Jika Slave gagal buka hedge (misal not enough money),
-            // Master WAJIB LANGSUNG DI-CLOSE agar tidak floating sendirian tanpa pasangan!
-            Print("🚨 [HEDGE FAILED] Slave gagal buka order (Code=", m_trade.ResultRetcode(),
-                  " ", m_trade.ResultComment(), ")! Mengirim sinyal CLOSE_ALL ke Master untuk keamanan!");
-            SendCommandToMaster("CLOSE_ALL");
+            uint retcode = m_trade.ResultRetcode();
+            Print("🚨 [HEDGE FAILED] Slave gagal buka order (Code=", retcode,
+                  " ", m_trade.ResultComment(), ")");
+            // HANYA kirim CLOSE_ALL jika bukan karena pasar tutup atau auto-trading mati!
+            if(retcode != TRADE_RETCODE_MARKET_CLOSED && retcode != TRADE_RETCODE_CLIENT_DISABLES_AT)
+            {
+               Print("Mengirim sinyal CLOSE_ALL ke Master untuk keamanan!");
+               SendCommandToMaster("CLOSE_ALL");
+            }
          }
       }
    }
@@ -745,7 +794,7 @@ double GetSlaveTotalProfit()
    for(int s = PositionsTotal() - 1; s >= 0; s--)
    {
       ulong s_ticket = PositionGetTicket(s);
-      if(s_ticket > 0 && PositionGetInteger(POSITION_MAGIC) == (long)m_magic)
+      if(IsSlaveHedgePosition(s_ticket))
          total += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
    }
    return total;
@@ -760,7 +809,7 @@ void CloseAllSlavePositions()
    for(int s = PositionsTotal() - 1; s >= 0; s--)
    {
       ulong s_ticket = PositionGetTicket(s);
-      if(s_ticket > 0 && PositionGetInteger(POSITION_MAGIC) == (long)m_magic)
+      if(IsSlaveHedgePosition(s_ticket))
       {
          if(m_trade.PositionClose(s_ticket)) closed_count++;
       }
@@ -893,7 +942,7 @@ void UpdateDashboard(double slave_profit, double combined_net_profit)
 
    string text = "\n" +
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
-      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - SLAVE LP ENGINE v1.22           ║\n" +
+      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - SLAVE LP ENGINE v1.24           ║\n" +
       "  ╠════════════════════════════════════════════════════════════════╣\n" +
       "    Pair Group ID   : #" + IntegerToString(InpPairID) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
       "    Bridge Files    : " + m_master_file + " <-> " + m_slave_file + "\n" +
@@ -914,11 +963,13 @@ void UpdateDashboard(double slave_profit, double combined_net_profit)
       "    Status : " + status_str + "\n" +
       "  ╚════════════════════════════════════════════════════════════════╝\n";
 
+   ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);
    Comment(text);
 }
 
 void UpdateDashboardOffline()
 {
+   ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);
    Comment("\n  ⚠️ [BonusHedge_Slave] Menunggu data dari Master EA...\n" +
            "  Pastikan BonusHedge_Master.mq5 sudah aktif di chart MT5 Master (100870).");
 }

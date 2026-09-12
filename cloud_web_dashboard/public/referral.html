@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>1st-Level Referral & IB Partner Portal | Dual-MT5 Bonus Hedging</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --card-border: #1f293d;
+      --card-hover: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --green: #10b981;
+      --green-bg: rgba(16, 185, 129, 0.12);
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --blue-bg: rgba(59, 130, 246, 0.15);
+      --amber: #f59e0b;
+      --purple: #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+    body { background: var(--bg); color: var(--text-main); min-height: 100vh; padding: 16px; -webkit-tap-highlight-color: transparent; }
+    .container { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Top Navigation */
+    .navbar {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 14px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-title { display: flex; align-items: center; gap: 10px; }
+    .brand-logo { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #f59e0b, #ec4899); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #fff; }
+    .brand-text h1 { font-size: 16px; font-weight: 800; }
+    .brand-text p { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+
+    /* Portal Switcher Nav */
+    .portal-nav { display: flex; align-items: center; gap: 6px; background: #0b1120; border: 1px solid var(--card-border); border-radius: 8px; padding: 3px; }
+    .portal-link { color: var(--text-muted); text-decoration: none; padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 6px; transition: 0.15s; }
+    .portal-link:hover { color: #fff; background: rgba(255,255,255,0.05); }
+    .portal-link.active { background: var(--amber); color: #000; font-weight: 800; }
+
+    /* Partner Identity Bar */
+    .partner-bar {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+    }
+    .p-info { display: flex; flex-direction: column; gap: 2px; }
+    .p-tier { font-size: 11px; font-weight: 800; color: var(--amber); text-transform: uppercase; letter-spacing: 0.5px; }
+    .p-name { font-size: 18px; font-weight: 800; color: #fff; }
+
+    .partner-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .partner-select {
+      background: #0b1120;
+      border: 1px solid var(--card-border);
+      color: #fff;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Referral Link Box */
+    .ref-link-box {
+      background: #0b1120;
+      border: 1px dashed var(--card-border);
+      border-radius: 12px;
+      padding: 12px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .ref-input {
+      background: transparent;
+      border: none;
+      color: #60a5fa;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      width: 100%;
+      max-width: 450px;
+      outline: none;
+    }
+    .btn-copy {
+      background: var(--blue);
+      border: none;
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    .btn-copy:hover { background: #2563eb; }
+
+    /* Commission KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .kpi-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-val { font-size: 22px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+    .kpi-sub { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+
+    /* Period Filter */
+    .period-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 10px 16px;
+    }
+    .p-btns { display: flex; gap: 4px; background: #0b1120; border: 1px solid var(--card-border); border-radius: 8px; padding: 2px; }
+    .p-btn { background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 6px; cursor: pointer; }
+    .p-btn.active { background: var(--amber); color: #000; font-weight: 800; }
+
+    /* Downline Table */
+    .table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .table-title { font-size: 14px; font-weight: 800; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+    .partner-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .partner-table th { text-align: left; padding: 10px 8px; color: var(--text-muted); font-weight: 700; border-bottom: 1px solid var(--card-border); }
+    .partner-table td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); font-family: 'JetBrains Mono', monospace; }
+
+    /* Payout Box */
+    .payout-box {
+      background: #0b1120;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 14px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+    }
+
+    .green { color: var(--green); }
+    .red { color: var(--red); }
+    .amber { color: var(--amber); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    
+    <!-- Top Navbar -->
+    <header class="navbar">
+      <div class="brand-title">
+        <div class="brand-logo">🤝</div>
+        <div class="brand-text">
+          <h1>1ST-LEVEL REFERRAL & IB PARTNER CONSOLE</h1>
+          <p>Portal Komisi Rebate & Rekap Client Downline Real-Time</p>
+        </div>
+      </div>
+
+      <!-- Portal Switcher Links -->
+      <nav class="portal-nav">
+        <a href="/" class="portal-link">👑 Manager Console</a>
+        <a href="/client" class="portal-link">👤 Client Portal</a>
+        <a href="/referral" class="portal-link active">🤝 Referral IB</a>
+      </nav>
+    </header>
+
+    <!-- Partner Identity Bar -->
+    <section class="partner-bar">
+      <div class="p-info">
+        <div class="p-tier" id="p-tier">VIP PARTNER (1ST LEVEL)</div>
+        <div class="p-name" id="p-name">Budi Santoso</div>
+      </div>
+
+      <div class="partner-controls">
+        <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">GANTI PARTNER:</span>
+        <select id="partner-select" class="partner-select" onchange="changePartner(this.value)">
+          <option value="PARTNER01">Budi Santoso (PARTNER01)</option>
+          <option value="PARTNER02">David Tan (PARTNER02)</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Referral Link Box -->
+    <section class="ref-link-box">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 16px;">🔗</span>
+        <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">LINK UNDANGAN CLIENT ANDA:</span>
+      </div>
+      <input type="text" id="ref-link" class="ref-input" readonly value="http://localhost:3000/client?ref=PARTNER01">
+      <button class="btn-copy" onclick="copyRefLink()">Salin Link 📋</button>
+    </section>
+
+    <!-- Period Selector -->
+    <section class="period-bar">
+      <div style="font-size: 13px; font-weight: 800; color: #fff;">
+        KOMISI REBATE & PROFIT SHARE DITERIMA
+      </div>
+      <div class="p-btns">
+        <button class="p-btn active" onclick="setPeriod('today')">Hari Ini</button>
+        <button class="p-btn" onclick="setPeriod('week')">Minggu Ini</button>
+        <button class="p-btn" onclick="setPeriod('month')">Bulan Ini</button>
+        <button class="p-btn" onclick="setPeriod('all_time')">Semua Total</button>
+      </div>
+    </section>
+
+    <!-- KPI Summary Grid -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">TOTAL CLIENT DOWNLINE</div>
+        <div class="kpi-val" id="total-clients">0 Akun</div>
+        <div class="kpi-sub">Level 1 Direct Referrals</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">TOTAL EQUITY MANAGED</div>
+        <div class="kpi-val" id="total-equity">$0.00</div>
+        <div class="kpi-sub" id="total-equity-rp">Rp0</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">VOLUME TRADED (LOTS)</div>
+        <div class="kpi-val" id="total-lots">0.00 Lot</div>
+        <div class="kpi-sub">Rebate: <strong id="rebate-rate">$7.50/Lot</strong></div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label" id="comm-label">TOTAL KOMISI (HARI INI)</div>
+        <div class="kpi-val amber" id="comm-val">+$0.00</div>
+        <div class="kpi-sub" id="comm-rp">+Rp0</div>
+      </div>
+    </section>
+
+    <!-- Downline Clients Table -->
+    <section class="table-card">
+      <div class="table-title">
+        <span>DAFTAR CLIENT DI BAWAH REFERRAL ANDA</span>
+        <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Skema: Rebate $7.50/Lot + 10% Net Profit Share</span>
+      </div>
+
+      <table class="partner-table">
+        <thead>
+          <tr>
+            <th>Akun Client</th>
+            <th>Nama Client</th>
+            <th>Total Equity</th>
+            <th>Volume (Lot)</th>
+            <th>Net Profit Client</th>
+            <th>Komisi Partner ($)</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="downline-body">
+          <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Memuat data client downline...</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Payout Details -->
+      <div class="payout-box">
+        <div>
+          <span style="color: var(--text-muted);">Rekening Penarikan Komisi:</span>
+          <strong id="payout-bank" style="color: #fff; margin-left: 6px;">BCA 8010293841 a/n Budi Santoso</strong>
+        </div>
+        <div>
+          <span style="color: var(--green); font-weight: 700;">🟢 AUTO-SETTLEMENT MINGGUAN (Setiap Hari Senin)</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const USD_RATE = 17745;
+    let currentCode = new URLSearchParams(window.location.search).get('code') || 'PARTNER01';
+    let selectedPeriod = 'today';
+    let partnerData = null;
+
+    function formatNumber(num) {
+      return (num || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatRupiah(num) {
+      const abs = Math.abs(num || 0);
+      const sign = num < 0 ? '-' : '';
+      return sign + 'Rp' + Math.round(abs).toLocaleString('id-ID');
+    }
+
+    function copyRefLink() {
+      const el = document.getElementById('ref-link');
+      el.select();
+      navigator.clipboard.writeText(el.value);
+      alert('Link referral berhasil disalin ke clipboard:\n' + el.value);
+    }
+
+    function changePartner(code) {
+      currentCode = code;
+      window.history.replaceState(null, '', `?code=${code}`);
+      fetchPartnerData();
+    }
+
+    function setPeriod(p) {
+      selectedPeriod = p;
+      document.querySelectorAll('.p-btn').forEach(b => b.classList.remove('active'));
+      const idx = { today: 0, week: 1, month: 2, all_time: 3 }[p];
+      document.querySelectorAll('.p-btn')[idx]?.classList.add('active');
+
+      const labels = {
+        today: 'TOTAL KOMISI (HARI INI)',
+        week: 'TOTAL KOMISI (MINGGU INI)',
+        month: 'TOTAL KOMISI (BULAN INI)',
+        all_time: 'TOTAL KOMISI (SEMUA TOTAL)'
+      };
+      document.getElementById('comm-label').textContent = labels[p];
+
+      if (partnerData) renderPartnerUI(partnerData);
+    }
+
+    async function fetchPartnerData() {
+      try {
+        const res = await fetch(`/api/referral/${currentCode}`);
+        if (!res.ok) throw new Error("Partner not found");
+        partnerData = await res.json();
+        renderPartnerUI(partnerData);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function renderPartnerUI(d) {
+      document.getElementById('p-tier').textContent = d.tier || 'VIP PARTNER';
+      document.getElementById('p-name').textContent = d.partner_name || 'Partner';
+      document.getElementById('partner-select').value = d.code;
+      document.getElementById('payout-bank').textContent = d.payout_bank;
+      document.getElementById('ref-link').value = `${window.location.origin}/client?ref=${d.code}`;
+
+      // Total summary
+      document.getElementById('total-clients').textContent = `${d.total_referred_clients} Akun Aktif`;
+      document.getElementById('total-equity').textContent = '$' + formatNumber(d.total_referred_equity);
+      document.getElementById('total-equity-rp').textContent = formatRupiah(d.total_referred_equity * USD_RATE);
+      document.getElementById('total-lots').textContent = `${formatNumber(d.total_volume_lots)} Lot`;
+      document.getElementById('rebate-rate').textContent = `$${formatNumber(d.rebate_per_lot)}/Lot + ${d.profit_share_pct}% Profit Share`;
+
+      // Commission period
+      const commVal = selectedPeriod === 'today' ? d.commission_today :
+                      selectedPeriod === 'week' ? d.commission_week :
+                      selectedPeriod === 'month' ? d.commission_month : d.commission_all_time;
+      const commEl = document.getElementById('comm-val');
+      commEl.textContent = `+$${formatNumber(commVal)}`;
+      document.getElementById('comm-rp').textContent = `+${formatRupiah(commVal * USD_RATE)}`;
+
+      // Downline table
+      const tbody = document.getElementById('downline-body');
+      const clients = d.clients || [];
+
+      if (clients.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada client terdaftar di bawah kode referral ini.</td></tr>';
+      } else {
+        tbody.innerHTML = clients.map(c => {
+          return `
+            <tr>
+              <td style="color: #60a5fa; font-weight: 700;">#${c.login}</td>
+              <td style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; color: #fff;">${c.client_name}</td>
+              <td>$${formatNumber(c.equity)}</td>
+              <td>${formatNumber(c.estimated_lots)} Lot</td>
+              <td class="${c.profit_all_time >= 0 ? 'green' : 'red'}">${c.profit_all_time >= 0 ? '+' : ''}$${formatNumber(c.profit_all_time)}</td>
+              <td class="amber" style="font-weight: 800;">+$${formatNumber(c.partner_commission_earned)}</td>
+              <td><span style="color: var(--green); font-weight: 700;">● Aktif</span></td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    fetchPartnerData();
+    setInterval(fetchPartnerData, 2000);
+  </script>
+</body>
+</html>

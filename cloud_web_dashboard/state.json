@@ -1,0 +1,112 @@
+{
+  "accounts": {
+    "101035": {
+      "login": 101035,
+      "client_name": "Akun Master #101035",
+      "referral_code": "PARTNER01",
+      "symbol": "XAUUSD.std",
+      "pair_id": 1,
+      "shield_status": "NORMAL",
+      "cur_spread": 22,
+      "net_floating": -116.53,
+      "target_tp": 35,
+      "profit_today": 0,
+      "profit_week": 0,
+      "profit_month": 0,
+      "profit_all_time": 0,
+      "master": {
+        "login": 101035,
+        "equity": 1766.5,
+        "balance": 989.5,
+        "free_margin": 1503.99,
+        "margin_level": 672.93,
+        "profit": 777,
+        "count": 3
+      },
+      "slave": {
+        "login": 101037,
+        "equity": 307.06,
+        "balance": 1000.59,
+        "credit": 200,
+        "free_margin": 18.29,
+        "margin_level": 106.33,
+        "profit": -893.53,
+        "count": 3
+      },
+      "pairs": [
+        {
+          "master_ticket": 13795611,
+          "master_type": "SELL",
+          "master_vol": 0.1,
+          "master_price": 4374.96,
+          "master_profit": 257.6,
+          "slave_ticket": 13795612,
+          "slave_type": "BUY",
+          "slave_vol": 0.11,
+          "slave_price": 4375.34,
+          "slave_profit": -298.32,
+          "net_profit": -40.72
+        },
+        {
+          "master_ticket": 13798902,
+          "master_type": "SELL",
+          "master_vol": 0.1,
+          "master_price": 4395.43,
+          "master_profit": 462.3,
+          "slave_ticket": 13798904,
+          "slave_type": "BUY",
+          "slave_vol": 0.11,
+          "slave_price": 4395.35,
+          "slave_profit": -518.43,
+          "net_profit": -56.13
+        },
+        {
+          "master_ticket": 13814275,
+          "master_type": "SELL",
+          "master_vol": 0.1,
+          "master_price": 4354.91,
+          "master_profit": 57.1,
+          "slave_ticket": 13814276,
+          "slave_type": "BUY",
+          "slave_vol": 0.11,
+          "slave_price": 4355.2,
+          "slave_profit": -76.78,
+          "net_profit": -19.68
+        }
+      ],
+      "last_updated": 1789215129579,
+      "is_mock": false,
+      "is_online": false
+    }
+  },
+  "referrals": {
+    "PARTNER01": {
+      "code": "PARTNER01",
+      "name": "Budi Santoso",
+      "tier": "VIP Partner (1st Level)",
+      "rebate_per_lot": 7.5,
+      "profit_share_pct": 10,
+      "payout_bank": "BCA 8010293841 a/n Budi Santoso",
+      "client_logins": [
+        101429,
+        100870,
+        101372,
+        101680,
+        101035
+      ]
+    },
+    "PARTNER02": {
+      "code": "PARTNER02",
+      "name": "David Tan",
+      "tier": "Gold Partner (1st Level)",
+      "rebate_per_lot": 7.5,
+      "profit_share_pct": 10,
+      "payout_bank": "Mandiri 1370019283712 a/n David Tan",
+      "client_logins": [
+        101550,
+        101790,
+        101820
+      ]
+    }
+  }
+}

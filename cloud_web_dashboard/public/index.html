@@ -2,311 +2,1475 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Dual-MT5 Bonus Hedging Live Monitor</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dual-MT5 Integrated Console | Manager · Investor · Referral</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f8fafc;
-      --card-bg: #ffffff;
-      --card-border: #e2e8f0;
-      --text-main: #0f172a;
-      --text-muted: #64748b;
-      --green: #16a34a;
-      --red: #dc2626;
-      --gold: #d97706;
-      --blue: #2563eb;
+      --bg: #090d16;
+      --card-bg: #111827;
+      --card-border: #1f293d;
+      --card-hover: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --green: #10b981;
+      --green-bg: rgba(16, 185, 129, 0.12);
+      --red: #ef4444;
+      --red-bg: rgba(239, 68, 68, 0.12);
+      --amber: #f59e0b;
+      --amber-bg: rgba(245, 158, 11, 0.12);
+      --blue: #3b82f6;
+      --blue-bg: rgba(59, 130, 246, 0.15);
+      --purple: #8b5cf6;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-    body { background: var(--bg); color: var(--text-main); padding: 12px; display: flex; justify-content: center; min-height: 100vh; }
-    .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 10px; }
 
-    /* Account Selection & Status Bar */
-    .top-client-bar { display: flex; justify-content: space-between; align-items: center; background: #ffffff; border: 1px solid var(--card-border); border-radius: 12px; padding: 8px 12px; }
-    .client-select { border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 700; background: #f8fafc; color: var(--text-main); outline: none; }
-    .live-status { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+    body { background: var(--bg); color: var(--text-main); min-height: 100vh; padding: 16px; -webkit-tap-highlight-color: transparent; }
+    .main-wrapper { max-width: 1480px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Top Navbar */
+    .navbar {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 14px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-title { display: flex; align-items: center; gap: 10px; }
+    .brand-logo { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #fff; }
+    .brand-text h1 { font-size: 17px; font-weight: 800; letter-spacing: -0.3px; }
+    .brand-text p { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+
+    .nav-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+    /* Portal Switcher Nav (Interactive Tabs) */
+    .portal-nav { display: flex; align-items: center; gap: 6px; background: #070d19; border: 1px solid var(--card-border); border-radius: 10px; padding: 4px; }
+    .portal-tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 800;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .portal-tab-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
+    .portal-tab-btn.active-manager { background: var(--blue); color: #fff; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4); }
+    .portal-tab-btn.active-client { background: var(--green); color: #fff; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4); }
+    .portal-tab-btn.active-referral { background: var(--amber); color: #000; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4); }
+
+    /* Period Filter Buttons */
+    .period-selector {
+      display: flex;
+      background: #0b1120;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .period-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .period-btn.active { background: var(--blue); color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
+    /* Refresh indicator */
+    .refresh-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #0b1120;
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+    }
     .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.5s infinite; }
-    .offline-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-    /* Top Column Headers */
-    .header-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: center; font-size: 13px; font-weight: 800; color: #64748b; letter-spacing: 0.5px; padding: 4px 0; }
-    
-    /* 2-Column Metric Grid */
-    .grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .metric-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; justify-content: center; min-height: 62px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
-    .m-label { font-size: 11px; font-weight: 600; color: var(--text-muted); }
-    .m-val { font-size: 15px; font-weight: 800; color: var(--text-main); font-family: 'Inter', sans-serif; }
-    .m-sub { font-size: 11px; font-weight: 500; color: var(--text-muted); margin-top: 1px; }
-    .m-sub-status { font-size: 11px; font-weight: 600; color: #d97706; display: flex; align-items: center; gap: 4px; }
+    /* ========================================================= */
+    /* 1. MANAGER CONSOLE STYLES                                 */
+    /* ========================================================= */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .kpi-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px 18px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    .kpi-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-val { font-size: 20px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+    .kpi-sub { font-size: 11px; color: var(--text-muted); font-weight: 600; }
 
-    /* Detail Posisi Header */
-    .positions-header { font-size: 12px; font-weight: 800; color: #64748b; letter-spacing: 0.5px; margin-top: 6px; padding: 0 2px; display: flex; justify-content: space-between; align-items: center; }
-    
-    /* Position Cards */
-    .pos-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
-    .pos-tickets { font-size: 13px; font-weight: 700; color: #0f172a; }
-    .pos-legs { font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; color: var(--text-muted); }
-    .leg-m-val { font-weight: 700; }
-    .leg-s-val { font-weight: 700; }
-    .pos-net-row { text-align: right; font-size: 14px; font-weight: 800; margin-top: 2px; }
-    
-    .green-text { color: var(--green); }
-    .red-text { color: var(--red); }
+    .toolbar-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 16px; }
+    .view-modes { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+    .view-btn { background: #0b1120; border: 1px solid var(--card-border); color: var(--text-muted); padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .view-btn.active { background: #1e293b; color: #fff; border-color: #3b82f6; }
+
+    .pagination-bar { display: flex; align-items: center; gap: 6px; }
+    .page-btn { background: #0b1120; border: 1px solid var(--card-border); color: var(--text-muted); min-width: 34px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; cursor: pointer; transition: 0.15s; }
+    .page-btn:hover { background: #1e293b; color: #fff; }
+    .page-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .search-input { background: #0b1120; border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 12px; font-size: 12px; color: #fff; outline: none; min-width: 200px; }
+    .search-input:focus { border-color: var(--blue); }
+
+    .accounts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
+    .account-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; transition: transform 0.15s, border-color 0.15s; cursor: pointer; }
+    .account-card:hover { transform: translateY(-2px); border-color: #3b82f6; background: var(--card-hover); }
+
+    .acc-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--card-border); padding-bottom: 10px; }
+    .acc-client { font-size: 15px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .acc-meta { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
+
+    .badge { font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .badge-normal { background: var(--green-bg); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+    .badge-spread { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
+    .badge-news { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+
+    .ms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #0b1120; border: 1px solid var(--card-border); border-radius: 10px; padding: 10px; }
+    .ms-col { display: flex; flex-direction: column; gap: 2px; }
+    .ms-col-title { font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 3px; margin-bottom: 3px; }
+    .ms-row { display: flex; justify-content: space-between; font-size: 11px; }
+    .ms-row span:first-child { color: var(--text-muted); }
+    .ms-row span:last-child { font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+
+    .profit-box { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .p-stat { background: #0b1120; border: 1px solid var(--card-border); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; }
+    .p-stat-title { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+    .p-stat-val { font-size: 14px; font-weight: 800; font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+    .p-stat-rp { font-size: 10px; font-weight: 600; color: var(--text-muted); }
+
+    .card-footer { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--card-border); padding-top: 8px; }
+    .btn-detail { background: transparent; border: 1px solid var(--card-border); color: var(--blue); padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; }
+
+    /* ========================================================= */
+    /* 2. CLIENT INVESTOR PORTAL STYLES (LUXURY PRIVATE WEALTH)  */
+    /* ========================================================= */
+    .investor-hero-card {
+      background: linear-gradient(180deg, #0f172a 0%, #111c35 100%);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 20px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    .investor-hero-val { font-size: 40px; font-weight: 900; color: #fff; font-family: 'JetBrains Mono', monospace; margin: 4px 0; }
+    .investor-hero-sub { font-size: 16px; color: #60a5fa; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .investor-roi-pill { background: var(--green-bg); border: 1px solid rgba(16, 185, 129, 0.4); color: var(--green); padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+
+    .investor-sub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 18px; }
+    .investor-sub-item { display: flex; flex-direction: column; gap: 3px; }
+
+    .returns-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+    .returns-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 640px) { .returns-grid { grid-template-columns: 1fr; } }
+    .return-box { background: #070d19; border: 1px solid var(--card-border); border-radius: 14px; padding: 18px 22px; display: flex; flex-direction: column; gap: 4px; }
+
+    .payout-split-card { background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 14px; padding: 18px 22px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; }
+    .payout-amount { font-size: 24px; font-weight: 900; color: var(--green); font-family: 'JetBrains Mono', monospace; }
+
+    .svg-chart-wrap { width: 100%; height: 160px; overflow: hidden; }
+
+    /* ========================================================= */
+    /* 3. REFERRAL IB PORTAL STYLES                              */
+    /* ========================================================= */
+    .partner-bar { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 16px 20px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; }
+    .ref-link-box { background: #070d19; border: 1px dashed var(--card-border); border-radius: 12px; padding: 12px 18px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+    .ref-input { background: transparent; border: none; color: #60a5fa; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; width: 100%; max-width: 450px; outline: none; }
+    .btn-copy { background: var(--blue); border: none; color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; }
+
+    .partner-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .partner-table th { text-align: left; padding: 10px 8px; color: var(--text-muted); font-weight: 700; border-bottom: 1px solid var(--card-border); }
+    .partner-table td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); font-family: 'JetBrains Mono', monospace; }
+
+    .green { color: var(--green); }
+    .red { color: var(--red); }
+    .amber { color: var(--amber); }
+
+    /* Modal Deep Dive */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 999; padding: 16px; }
+    .modal-content { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--card-border); padding-bottom: 12px; }
+    .modal-close { background: #0b1120; border: 1px solid var(--card-border); color: var(--text-muted); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-weight: 800; }
+    .pos-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .pos-table th { text-align: left; padding: 8px; color: var(--text-muted); font-weight: 700; border-bottom: 1px solid var(--card-border); }
+    .pos-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="main-wrapper">
     
-    <!-- Top Account Selection / Status -->
-    <div class="top-client-bar">
-      <select id="acc-select" class="client-select" onchange="changeAccount(this.value)">
-        <option value="">Pilih Akun MT5...</option>
-      </select>
-      <div class="live-status">
-        <div id="status-dot" class="live-dot"></div>
-        <span id="status-text" style="color: var(--green);">ONLINE</span>
+    <!-- Top Universal Navbar -->
+    <header class="navbar">
+      <div class="brand-title">
+        <div class="brand-logo" id="header-logo">⚡</div>
+        <div class="brand-text">
+          <h1 id="header-title">DUAL-MT5 PORTFOLIO CONSOLE <span style="color: var(--blue); font-size: 12px; font-weight: 800;">v1.24</span></h1>
+          <p id="header-subtitle">Multi-Account Executive Monitor · Anti-MC Hedging System</p>
+        </div>
       </div>
+
+      <div class="nav-controls">
+        <!-- 3 Interactive Tabs Switcher -->
+        <nav class="portal-nav">
+          <button id="tab-manager" class="portal-tab-btn active-manager" onclick="switchPortal('manager')">👑 Mode Manager</button>
+          <button id="tab-client" class="portal-tab-btn" onclick="switchPortal('client')">👤 Mode Investor</button>
+          <button id="tab-referral" class="portal-tab-btn" onclick="switchPortal('referral')">🤝 Mode Referral IB</button>
+        </nav>
+
+        <!-- Period Filter -->
+        <div class="period-selector" id="top-period-selector">
+          <button class="period-btn active" onclick="setPeriod('today')">Hari Ini</button>
+          <button class="period-btn" onclick="setPeriod('week')">Minggu Ini</button>
+          <button class="period-btn" onclick="setPeriod('month')">Bulan Ini</button>
+          <button class="period-btn" onclick="setPeriod('all_time')">Semua (Total)</button>
+        </div>
+
+        <!-- Live Refresh Status -->
+        <div class="refresh-badge">
+          <div class="live-dot"></div>
+          <span id="refresh-status">LIVE SYNC</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================================================================= -->
+    <!-- PANEL 1: 👑 MANAGER CONSOLE (Kokpit Bot 9 Akun, Spread, Order)    -->
+    <!-- ================================================================= -->
+    <div id="panel-manager" style="display: flex; flex-direction: column; gap: 16px;">
+      
+
+      <!-- Executive KPI Summary Strip (All Accounts Aggregated) -->
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">TOTAL AKUN MANAGED</div>
+          <div class="kpi-val" id="kpi-accounts">0 / 0 Active</div>
+          <div class="kpi-sub" id="kpi-shield-alert">🛡️ Semua Sistem Normal</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">TOTAL MASTER EQUITY</div>
+          <div class="kpi-val" id="kpi-master-eq">$0.00</div>
+          <div class="kpi-sub" id="kpi-master-rp">Rp0</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">TOTAL SLAVE EQUITY</div>
+          <div class="kpi-val" id="kpi-slave-eq">$0.00</div>
+          <div class="kpi-sub" id="kpi-slave-cr">Total Bonus Cr: $0.00</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">PORTFOLIO NET FLOATING</div>
+          <div class="kpi-val" id="kpi-net-float">$0.00</div>
+          <div class="kpi-sub" id="kpi-net-rp">Rp0</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label" id="kpi-profit-label">NET PROFIT (HARI INI)</div>
+          <div class="kpi-val green" id="kpi-realized-profit">+$0.00</div>
+          <div class="kpi-sub" id="kpi-profit-rp">+Rp0</div>
+        </div>
+      </section>
+
+      <!-- Toolbar: Pagination, 1-Screen Mode & Search -->
+      <section class="toolbar-bar">
+        <div class="view-modes">
+          <span style="color: var(--text-muted); font-size: 12px;">TAMPILAN:</span>
+          <button id="mode-paged" class="view-btn active" onclick="setViewMode('paged')">📄 Halaman (3/6)</button>
+          <button id="mode-all" class="view-btn" onclick="setViewMode('all')">🖥️ 1 Layar Penuh (All)</button>
+        </div>
+
+        <!-- Pagination Buttons -->
+        <div class="pagination-bar" id="pagination-controls">
+          <button class="page-btn" id="btn-prev" onclick="prevPage()">◀</button>
+          <button class="page-btn active" id="btn-page-1" onclick="goToPage(1)">1</button>
+          <button class="page-btn" id="btn-page-2" onclick="goToPage(2)">2</button>
+          <button class="page-btn" id="btn-page-3" onclick="goToPage(3)">3</button>
+          <button class="page-btn" id="btn-next" onclick="nextPage()">▶</button>
+        </div>
+
+        <!-- Search Filter -->
+        <input type="text" id="search-input" class="search-input" placeholder="🔍 Cari Client / Akun MT5..." oninput="handleSearch()">
+      </section>
+
+      <!-- Accounts Cards Grid -->
+      <main class="accounts-grid" id="accounts-container">
+        <div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 40px;">
+          Memuat data akun client...
+        </div>
+      </main>
+
     </div>
 
-    <!-- Column Titles -->
-    <div class="header-cols">
-      <div>MASTER</div>
-      <div>SLAVE</div>
+    <!-- ================================================================= -->
+    <!-- PANEL 2: 👤 INVESTOR PORTAL (Laporan Rekening & Cuan Bersih Rp)   -->
+    <!-- ================================================================= -->
+    <div id="panel-client" style="display: none; flex-direction: column; gap: 20px;">
+      
+      <!-- Client Selector Bar -->
+      <section style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 18px 24px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div style="width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #3b82f6); display: flex; align-items: center; justify-content: center; font-size: 20px;">👤</div>
+          <div>
+            <div style="font-size: 18px; font-weight: 800; color: #fff;" id="inv-client-name">Bpk. Hendra (Client #1)</div>
+            <div style="font-size: 12px; color: var(--text-muted);" id="inv-bank-info">Rekening Terdaftar: BCA 8010293841</div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 11px; font-weight: 700; color: var(--text-muted);">PILIH PORTOFOLIO:</span>
+          <select id="inv-acc-select" class="acc-picker" onchange="changeInvestorAccount(this.value)">
+            <option value="">Memuat akun...</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Main Asset Value Hero Card -->
+      <main class="investor-hero-card">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <div style="font-size: 12px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.8px;">TOTAL NILAI PORTOFOLIO ANDA SAAT INI</div>
+            <div class="investor-hero-val" id="inv-val-rp">Rp46.976.338</div>
+            <div class="investor-hero-sub" id="inv-val-usd">$2,647.30 USD</div>
+          </div>
+
+          <div class="investor-roi-pill">
+            <span>▲</span>
+            <span id="inv-roi-text">+32.4% ROI Sejak Awal</span>
+          </div>
+        </div>
+
+        <!-- Sub KPI 3 Kolom -->
+        <div class="investor-sub-grid">
+          <div class="investor-sub-item">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Modal Awal Disetor</div>
+            <div style="font-size: 17px; font-weight: 800; font-family: 'JetBrains Mono', monospace;" id="inv-deposit-usd">$2,000.00</div>
+            <span style="font-size: 11px; color: var(--text-muted);" id="inv-deposit-rp">Rp35.490.000</span>
+          </div>
+
+          <div class="investor-sub-item">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Total Keuntungan Kumulatif</div>
+            <div style="font-size: 17px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--green);" id="inv-total-gain-usd">+$1,420.50</div>
+            <span style="font-size: 11px; color: var(--green);" id="inv-total-gain-rp">+Rp25.206.772</span>
+          </div>
+
+          <div class="investor-sub-item">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Status Pengelolaan Modal</div>
+            <div style="font-size: 14px; font-weight: 800; color: var(--green);">● Aktif Menghasilkan</div>
+            <span style="font-size: 11px; color: var(--text-muted);">Proteksi Anti-MC Otomatis</span>
+          </div>
+        </div>
+      </main>
+
+      <!-- Returns Showcase -->
+      <section class="returns-card">
+        <div style="font-size: 15px; font-weight: 800; color: #fff;">KEUNTUNGAN BERSIH YANG DIHASILKAN (SESUAI PERIODE)</div>
+        
+        <div class="returns-grid">
+          <div class="return-box">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;" id="inv-profit-period-label">KEUNTUNGAN BERSIH (HARI INI)</div>
+            <div style="font-size: 26px; font-weight: 900; font-family: 'JetBrains Mono', monospace; color: var(--green);" id="inv-period-profit-rp">+Rp860.632</div>
+            <div style="font-size: 12px; color: var(--text-muted);" id="inv-period-profit-usd">+$48.50 USD</div>
+          </div>
+
+          <div class="return-box">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">FLOATING SIKLUS BERJALAN</div>
+            <div style="font-size: 26px; font-weight: 900; font-family: 'JetBrains Mono', monospace; color: var(--green);" id="inv-float-rp">+Rp475.566</div>
+            <div style="font-size: 12px; color: var(--text-muted);" id="inv-float-usd">+$26.80 USD (Terlindung Hedging)</div>
+          </div>
+        </div>
+
+        <!-- Bagi Hasil Bersih Box (Investor Member Public View: 60/40) -->
+        <div class="payout-split-card" style="flex-direction: column; align-items: stretch; gap: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="font-size: 15px; font-weight: 800; color: #fff;">Hak Transfer Bersih Investor (60% Bagi Hasil Konsorsium)</h3>
+                <span style="font-size: 10px; font-weight: 800; background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 2px 8px; border-radius: 6px;">SKEMA 60/40</span>
+              </div>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                Setelah dipotong 40% biaya pengelolaan sistem & infrastruktur hedging bot. Bersih ditransfer langsung ke rekening bank anggota.
+              </p>
+            </div>
+            <div style="text-align: right;">
+              <div class="payout-amount" id="inv-client-payout-amount">+Rp0</div>
+              <span style="font-size: 10px; font-weight: 800; background: var(--green-bg); color: var(--green); border: 1px solid rgba(16,185,129,0.4); padding: 3px 8px; border-radius: 6px;">SIAP DITRANSFER</span>
+            </div>
+          </div>
+
+          <!-- Rincian Transparan untuk Anggota (60/40) -->
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: 10px; padding: 12px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; font-size: 12px;">
+            <div>
+              <div style="color: var(--text-muted); font-size: 11px; font-weight: 700;">TOTAL PROFIT DIHASILKAN (100%)</div>
+              <div style="font-weight: 800; color: #fff; font-size: 14px; margin-top: 2px;" id="inv-split-gross">+Rp0 ($0.00)</div>
+            </div>
+            <div>
+              <div style="color: var(--text-muted); font-size: 11px; font-weight: 700;">BIAYA PENGELOLAAN SISTEM (40%)</div>
+              <div style="font-weight: 800; color: #f87171; font-size: 14px; margin-top: 2px;" id="inv-split-fee">-Rp0 ($0.00)</div>
+              <div style="font-size: 10px; color: var(--text-muted);">Infrastruktur VPS, server & hedging</div>
+            </div>
+            <div>
+              <div style="color: var(--text-muted); font-size: 11px; font-weight: 700;">HAK BERSIH ANGGOTA (60%)</div>
+              <div style="font-weight: 900; color: var(--green); font-size: 14px; margin-top: 2px;" id="inv-split-net">+Rp0 ($0.00)</div>
+              <div style="font-size: 10px; color: var(--green);">Masuk rekening bank anggota</div>
+            </div>
+          </div>
+
+          <!-- Secret Coordinator Toggle & Box -->
+          <div style="border-top: 1px dashed var(--card-border); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 11px; color: var(--text-muted);">
+                Akses Internal Konsorsium:
+              </span>
+              <button onclick="toggleCoordinatorCard()" id="btn-toggle-coord" style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: var(--amber); font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 6px; cursor: pointer;">
+                🔐 Buka Rincian Koordinator
+              </button>
+            </div>
+
+            <div id="coordinator-secret-box" style="display: none; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 10px; padding: 14px; margin-top: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-size: 12px; font-weight: 800; color: var(--amber);">
+                  🔒 KAS INTERNAL KOORDINATOR KONSORSIUM (RAHASIA / PRIVATE)
+                </div>
+                <span style="font-size: 10px; color: var(--amber); background: rgba(245, 158, 11, 0.15); padding: 2px 6px; border-radius: 4px; font-weight: 700;">CONFIDENTIAL</span>
+              </div>
+              <p style="font-size: 11px; color: #cbd5e1; margin-bottom: 10px; line-height: 1.5;">
+                Rincian alokasi dari <strong>40% biaya pengelolaan sistem</strong> yang disetorkan oleh anggota konsorsium. Anggota hanya melihat potongan 40% secara gelondongan dan tidak mengetahui margin komisi koordinator.
+              </p>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; font-size: 12px;">
+                <div style="background: rgba(15, 23, 42, 0.7); padding: 10px; border-radius: 8px; border-left: 3px solid var(--amber);">
+                  <div style="color: var(--amber); font-weight: 800; font-size: 11px;">KOMISI KOORDINATOR (10%)</div>
+                  <div style="font-size: 15px; font-weight: 900; color: #fbbf24; margin-top: 2px;" id="coord-profit-rp">+Rp0</div>
+                  <div style="font-size: 11px; color: var(--text-muted);" id="coord-profit-usd">+$0.00 USD (Margin Bersih Anda)</div>
+                </div>
+                <div style="background: rgba(15, 23, 42, 0.7); padding: 10px; border-radius: 8px; border-left: 3px solid #60a5fa;">
+                  <div style="color: #60a5fa; font-weight: 800; font-size: 11px;">SETOR KE MASTER OPERATOR (30%)</div>
+                  <div style="font-size: 15px; font-weight: 900; color: #93c5fd; margin-top: 2px;" id="master-fee-rp">+Rp0</div>
+                  <div style="font-size: 11px; color: var(--text-muted);" id="master-fee-usd">+$0.00 USD (Lisensi & Proteksi Hedging)</div>
+                </div>
+                <div style="background: rgba(15, 23, 42, 0.7); padding: 10px; border-radius: 8px; border-left: 3px solid var(--green);">
+                  <div style="color: var(--green); font-weight: 800; font-size: 11px;">DIBAGIKAN KE ANGGOTA (60%)</div>
+                  <div style="font-size: 15px; font-weight: 900; color: #34d399; margin-top: 2px;" id="coord-members-rp">+Rp0</div>
+                  <div style="font-size: 11px; color: var(--text-muted);" id="coord-members-usd">+$0.00 USD (Hak Bersih Anggota)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SVG Equity Growth Curve -->
+      <section style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-size: 14px; font-weight: 800; color: #fff;">GRAFIK KURVA PERTUMBUHAN MODAL (EQUITY CURVE)</div>
+          <span style="font-size: 11px; font-weight: 700; color: var(--green);">TREN: STABIL NAIK KONSISTEN</span>
+        </div>
+        <div class="svg-chart-wrap" id="inv-chart-container">
+          <!-- Injected SVG -->
+        </div>
+      </section>
+
+      <!-- Live Open Positions & Hedging Pairs (MT5 Real-Time Order Book) -->
+      <section style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <div style="font-size: 15px; font-weight: 800; color: #fff;">📊 STATUS POSISI TRADING HEDGING TERBUKA (LIVE ORDER MT5)</div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+              Rincian tiket, tipe order, lot volume, harga masuk (Open Price), dan floating profit langsung dari terminal MT5.
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px;" id="inv-positions-badges">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <table class="partner-table" style="min-width: 750px;">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Akun Master (#101035)</th>
+                <th>Akun Slave (#101037)</th>
+                <th>Harga Masuk (Open Price)</th>
+                <th>Volume (Lot)</th>
+                <th>Floating Master</th>
+                <th>Floating Slave</th>
+                <th>Net Floating ($)</th>
+                <th>Status Proteksi</th>
+              </tr>
+            </thead>
+            <tbody id="inv-positions-table-body">
+              <!-- Injected via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Riwayat Transfer Bagi Hasil -->
+      <section style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 15px; font-weight: 800; color: #fff;">RIWAYAT TRANSFER BAGI HASIL KE REKENING ANDA</div>
+        <table class="partner-table">
+          <thead>
+            <tr>
+              <th>Tanggal</th>
+              <th>Nominal Bersih (Rp)</th>
+              <th>Nominal ($)</th>
+              <th>Rekening Tujuan</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="inv-payout-table-body">
+            <!-- Injected via JS -->
+          </tbody>
+        </table>
+      </section>
+
     </div>
 
-    <!-- Row 1: Rate -->
-    <div class="grid-row">
-      <div class="metric-card">
-        <div class="m-label">Rate</div>
-        <div class="m-val" id="m-rate">17.745</div>
-        <div class="m-sub-status">↻ berjalan</div>
-      </div>
-      <div class="metric-card">
-        <div class="m-label">Rate</div>
-        <div class="m-val" id="s-rate">17.745</div>
-        <div class="m-sub-status">↻ berjalan</div>
-      </div>
-    </div>
+    <!-- ================================================================= -->
+    <!-- PANEL 3: 🤝 REFERRAL IB CONSOLE (Mitra Level 1 & Komisi Downline) -->
+    <!-- ================================================================= -->
+    <div id="panel-referral" style="display: none; flex-direction: column; gap: 16px;">
+      
+      <!-- Partner Info -->
+      <section class="partner-bar">
+        <div>
+          <div style="font-size: 11px; font-weight: 800; color: var(--amber); text-transform: uppercase;" id="ref-tier">VIP PARTNER (1ST LEVEL)</div>
+          <div style="font-size: 18px; font-weight: 800; color: #fff;" id="ref-name">Budi Santoso</div>
+        </div>
 
-    <!-- Row 2: Bid/Ask -->
-    <div class="grid-row">
-      <div class="metric-card">
-        <div class="m-label">Bid/Ask</div>
-        <div class="m-val" id="m-bidask">4579.07/4579.35</div>
-      </div>
-      <div class="metric-card">
-        <div class="m-label">Bid/Ask</div>
-        <div class="m-val" id="s-bidask">4579.07/4579.35</div>
-      </div>
-    </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">GANTI PARTNER:</span>
+          <select id="ref-partner-select" class="acc-picker" onchange="changePartnerCode(this.value)">
+            <option value="PARTNER01">Budi Santoso (PARTNER01)</option>
+            <option value="PARTNER02">David Tan (PARTNER02)</option>
+          </select>
+        </div>
+      </section>
 
-    <!-- Row 3: Equity -->
-    <div class="grid-row">
-      <div class="metric-card">
-        <div class="m-label">Equity</div>
-        <div class="m-val" id="m-equity">$0.00</div>
-        <div class="m-sub" id="m-bal-cr">Bal 0,00 · Cr 0,00</div>
-      </div>
-      <div class="metric-card">
-        <div class="m-label">Equity</div>
-        <div class="m-val" id="s-equity">$0.00</div>
-        <div class="m-sub" id="s-bal-cr">Bal 0,00 · Cr 0,00</div>
-      </div>
-    </div>
+      <!-- Referral Link Generator -->
+      <section class="ref-link-box">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">🔗</span>
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">LINK UNDANGAN CLIENT ANDA:</span>
+        </div>
+        <input type="text" id="ref-input-link" class="ref-input" readonly value="http://localhost:3000/?view=client&ref=PARTNER01">
+        <button class="btn-copy" onclick="copyReferralLink()">Salin Link 📋</button>
+      </section>
 
-    <!-- Row 4: MC (Margin Call Price) -->
-    <div class="grid-row">
-      <div class="metric-card">
-        <div class="m-label">MC</div>
-        <div class="m-val" style="color: #d97706;" id="m-mc">@0.00</div>
-        <div class="m-sub" id="m-mc-pips">+0.0 pips</div>
-      </div>
-      <div class="metric-card">
-        <div class="m-label">MC</div>
-        <div class="m-val" style="color: #d97706;" id="s-mc">@0.00</div>
-        <div class="m-sub" id="s-mc-pips">-0.0 pips</div>
-      </div>
-    </div>
+      <!-- Referral KPI Grid -->
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">TOTAL CLIENT DOWNLINE</div>
+          <div class="kpi-val" id="ref-total-clients">4 Akun</div>
+          <div class="kpi-sub">Level 1 Direct Referrals</div>
+        </div>
 
-    <!-- Row 5: Margin Level -->
-    <div class="grid-row">
-      <div class="metric-card">
-        <div class="m-label">Margin Level</div>
-        <div class="m-val" id="m-margin-level">0.00%</div>
-      </div>
-      <div class="metric-card">
-        <div class="m-label">Margin Level</div>
-        <div class="m-val" id="s-margin-level">0.00%</div>
-      </div>
-    </div>
+        <div class="kpi-card">
+          <div class="kpi-label">TOTAL EQUITY DOWNLINE</div>
+          <div class="kpi-val" id="ref-total-equity">$0.00</div>
+          <div class="kpi-sub" id="ref-total-equity-rp">Rp0</div>
+        </div>
 
-    <!-- Positions Section Header -->
-    <div class="positions-header">
-      <span>DETAIL POSISI (<span id="pair-count">0</span>) · POS M/S: <span id="pos-ms">0/0</span></span>
-      <span>▼</span>
-    </div>
+        <div class="kpi-card">
+          <div class="kpi-label">VOLUME TRADED (LOTS)</div>
+          <div class="kpi-val" id="ref-total-lots">0.00 Lot</div>
+          <div class="kpi-sub">Rebate: <strong style="color: var(--amber);">$7.50/Lot</strong></div>
+        </div>
 
-    <!-- Position Cards List -->
-    <div id="positions-list" style="display: flex; flex-direction: column; gap: 10px;">
-      <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 25px;">
-        Menunggu data dari MT5...
-      </div>
+        <div class="kpi-card">
+          <div class="kpi-label" id="ref-comm-label">TOTAL KOMISI (HARI INI)</div>
+          <div class="kpi-val amber" id="ref-comm-val">+$0.00</div>
+          <div class="kpi-sub" id="ref-comm-rp">+Rp0</div>
+        </div>
+      </section>
+
+      <!-- Downline Clients Table -->
+      <section style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 14px; font-weight: 800; color: #fff; display: flex; justify-content: space-between; align-items: center;">
+          <span>DAFTAR CLIENT DI BAWAH REFERRAL ANDA</span>
+          <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Skema: Rebate $7.50/Lot + 10% Net Profit Share</span>
+        </div>
+
+        <table class="partner-table">
+          <thead>
+            <tr>
+              <th>Akun Client</th>
+              <th>Nama Client</th>
+              <th>Total Equity</th>
+              <th>Volume (Lot)</th>
+              <th>Net Profit Client</th>
+              <th>Komisi Partner ($)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="ref-downline-tbody">
+            <!-- Injected via JS -->
+          </tbody>
+        </table>
+
+        <!-- Payout Info -->
+        <div style="background: #070d19; border: 1px solid var(--card-border); border-radius: 12px; padding: 14px 18px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px;">
+          <div>
+            <span style="color: var(--text-muted);">Rekening Penarikan Komisi:</span>
+            <strong id="ref-payout-bank" style="color: #fff; margin-left: 6px;">BCA 8010293841 a/n Budi Santoso</strong>
+          </div>
+          <div>
+            <span style="color: var(--green); font-weight: 700;">🟢 AUTO-SETTLEMENT MINGGUAN (Setiap Hari Senin)</span>
+          </div>
+        </div>
+      </section>
+
     </div>
 
   </div>
 
+  <!-- Deep Dive Account Detail Modal (For Manager Mode) -->
+  <div class="modal-overlay" id="detail-modal" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h2 id="modal-title" style="font-size: 16px; font-weight: 800;">Detail Akun</h2>
+          <p id="modal-subtitle" style="font-size: 12px; color: var(--text-muted);">Pair & Leg Breakdown</p>
+        </div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+
+      <div id="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+        <!-- Injected via JavaScript -->
+      </div>
+    </div>
+  </div>
+
   <script>
     const USD_RATE = 17745;
-    let currentLogin = new URLSearchParams(window.location.search).get('login') || '';
+    let currentPortal = new URLSearchParams(window.location.search).get('view') || 'manager'; // 'manager', 'client', 'referral'
+    let selectedPeriod = 'today'; // 'today', 'week', 'month', 'all_time'
+    let viewMode = 'paged'; // 'paged' or 'all'
+    let currentPage = 1;
+    const pageSize = 6;
+    let rawAccounts = [];
+    let filteredAccounts = [];
+
+    // Investor state
+    let investorLogin = new URLSearchParams(window.location.search).get('acc') || '';
+    let currentRole = new URLSearchParams(window.location.search).get('role') || '';
+    let investorData = null;
+
+    // Referral state
+    let currentPartnerCode = new URLSearchParams(window.location.search).get('code') || 'PARTNER01';
+    let partnerData = null;
 
     function formatNumber(num) {
       return (num || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
     function formatRupiah(num) {
-      return 'Rp' + Math.round(num || 0).toLocaleString('id-ID');
+      const abs = Math.abs(num || 0);
+      const sign = num < 0 ? '-' : '';
+      return sign + 'Rp' + Math.round(abs).toLocaleString('id-ID');
     }
 
-    async function loadAccounts() {
-      try {
-        const res = await fetch('/api/accounts');
-        const data = await res.json();
-        const select = document.getElementById('acc-select');
-        const accs = data.accounts || [];
+    // ----------------------------------------------------
+    // PORTAL SWITCHER LOGIC (INSTANT CLIENT-SIDE TAB SWITCH)
+    // ----------------------------------------------------
+    function switchPortal(portal) {
+      currentPortal = portal;
+      window.history.replaceState(null, '', `?view=${portal}` + (portal === 'client' && investorLogin ? `&acc=${investorLogin}` : '') + (currentRole ? `&role=${currentRole}` : ''));
 
-        if (accs.length === 0) {
-          select.innerHTML = '<option value="">Belum ada akun MT5 aktif</option>';
-          return;
-        }
+      document.getElementById('panel-manager').style.display = portal === 'manager' ? 'flex' : 'none';
+      document.getElementById('panel-client').style.display = portal === 'client' ? 'flex' : 'none';
+      document.getElementById('panel-referral').style.display = portal === 'referral' ? 'flex' : 'none';
 
-        select.innerHTML = accs.map(a => 
-          `<option value="${a.login}" ${a.login == currentLogin ? 'selected' : ''}>Akun #${a.login} (${a.is_online ? '🟢 Live' : '⚪ Offline'})</option>`
-        ).join('');
+      // Switch Tab styles
+      const tabMgr = document.getElementById('tab-manager');
+      const tabCli = document.getElementById('tab-client');
+      const tabRef = document.getElementById('tab-referral');
 
-        if (!currentLogin && accs.length > 0) {
-          currentLogin = accs[0].login;
-          select.value = currentLogin;
-        }
-      } catch (e) {
-        console.error("Failed to load accounts:", e);
+      tabMgr.className = 'portal-tab-btn ' + (portal === 'manager' ? 'active-manager' : '');
+      tabCli.className = 'portal-tab-btn ' + (portal === 'client' ? 'active-client' : '');
+      tabRef.className = 'portal-tab-btn ' + (portal === 'referral' ? 'active-referral' : '');
+
+      // Change Header Titles
+      const hTitle = document.getElementById('header-title');
+      const hSub = document.getElementById('header-subtitle');
+      const hLogo = document.getElementById('header-logo');
+
+      if (portal === 'manager') {
+        hTitle.innerHTML = 'DUAL-MT5 PORTFOLIO CONSOLE <span style="color: var(--blue); font-size: 12px; font-weight: 800;">v1.24</span>';
+        hSub.textContent = 'Multi-Account Executive Monitor · Anti-MC Hedging System';
+        hLogo.textContent = '⚡';
+        hLogo.style.background = 'linear-gradient(135deg, #3b82f6, #8b5cf6)';
+      } else if (portal === 'client') {
+        hTitle.innerHTML = 'GOLD HEDGE PRIVATE WEALTH <span style="color: var(--green); font-size: 12px; font-weight: 800;">INVESTOR</span>';
+        hSub.textContent = 'Laporan Portofolio & Keuangan Investor Mandiri';
+        hLogo.textContent = '🏆';
+        hLogo.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+        fetchInvestorData();
+      } else if (portal === 'referral') {
+        hTitle.innerHTML = '1ST-LEVEL REFERRAL & IB CONSOLE <span style="color: var(--amber); font-size: 12px; font-weight: 800;">PARTNER</span>';
+        hSub.textContent = 'Portal Komisi Rebate & Rekap Client Downline Real-Time';
+        hLogo.textContent = '🤝';
+        hLogo.style.background = 'linear-gradient(135deg, #f59e0b, #ec4899)';
+        fetchPartnerData();
       }
     }
 
-    function changeAccount(login) {
-      currentLogin = login;
-      window.history.replaceState(null, '', `?login=${login}`);
-      fetchDashboard();
+    // ----------------------------------------------------
+    // PERIOD FILTER LOGIC
+    // ----------------------------------------------------
+    function setPeriod(period) {
+      selectedPeriod = period;
+      document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
+      const activeIdx = { today: 0, week: 1, month: 2, all_time: 3 }[period];
+      document.querySelectorAll('.period-btn')[activeIdx]?.classList.add('active');
+
+      const labels = {
+        today: 'NET PROFIT (HARI INI)',
+        week: 'NET PROFIT (MINGGU INI)',
+        month: 'NET PROFIT (BULAN INI)',
+        all_time: 'NET PROFIT (SEMUA TOTAL)'
+      };
+      document.getElementById('kpi-profit-label').textContent = labels[period];
+      document.getElementById('inv-profit-period-label').textContent = 'KEUNTUNGAN BERSIH (' + period.toUpperCase() + ')';
+      document.getElementById('ref-comm-label').textContent = 'TOTAL KOMISI (' + period.toUpperCase() + ')';
+
+      updatePortfolioKPIs();
+      renderAccounts();
+      if (investorData) renderInvestorUI(investorData);
+      if (partnerData) renderPartnerUI(partnerData);
     }
 
-    async function fetchDashboard() {
-      if (!currentLogin) return;
+    function setViewMode(mode) {
+      viewMode = mode;
+      document.getElementById('mode-paged').classList.toggle('active', mode === 'paged');
+      document.getElementById('mode-all').classList.toggle('active', mode === 'all');
+      document.getElementById('pagination-controls').style.display = mode === 'paged' ? 'flex' : 'none';
+      renderAccounts();
+    }
+
+    function goToPage(p) { currentPage = p; renderAccounts(); }
+    function prevPage() { if (currentPage > 1) { currentPage--; renderAccounts(); } }
+    function nextPage() {
+      const maxPage = Math.ceil(filteredAccounts.length / pageSize) || 1;
+      if (currentPage < maxPage) { currentPage++; renderAccounts(); }
+    }
+
+    function handleSearch() {
+      const q = document.getElementById('search-input').value.toLowerCase().trim();
+      if (!q) {
+        filteredAccounts = [...rawAccounts];
+      } else {
+        filteredAccounts = rawAccounts.filter(a => 
+          String(a.login).includes(q) || 
+          (a.client_name && a.client_name.toLowerCase().includes(q)) ||
+          String(a.pair_id).includes(q)
+        );
+      }
+      currentPage = 1;
+      renderAccounts();
+    }
+
+    // ----------------------------------------------------
+    // DATA LOADING (PORTFOLIO DATA)
+    // ----------------------------------------------------
+    async function loadPortfolioData() {
       try {
-        const res = await fetch(`/api/status/${currentLogin}`);
-        if (!res.ok) {
-          document.getElementById('status-dot').className = 'offline-dot';
-          document.getElementById('status-text').textContent = 'OFFLINE';
-          document.getElementById('status-text').style.color = 'var(--red)';
-          return;
+        const [accRes, sumRes] = await Promise.all([
+          fetch('/api/accounts'),
+          fetch('/api/portfolio/summary')
+        ]);
+        
+        if (accRes.ok) {
+          const accData = await accRes.json();
+          rawAccounts = accData.accounts || [];
+          const q = document.getElementById('search-input').value.toLowerCase().trim();
+          if (!q) {
+            filteredAccounts = [...rawAccounts];
+          } else {
+            filteredAccounts = rawAccounts.filter(a => 
+              String(a.login).includes(q) || 
+              (a.client_name && a.client_name.toLowerCase().includes(q))
+            );
+          }
+
+          // Populate Investor Account dropdown
+          const invSel = document.getElementById('inv-acc-select');
+          invSel.innerHTML = rawAccounts.map(a => 
+            `<option value="${a.login}" ${a.login == investorLogin ? 'selected' : ''}>${a.client_name} (#${a.login})</option>`
+          ).join('');
+
+          if (!investorLogin && rawAccounts.length > 0) {
+            investorLogin = rawAccounts[0].login;
+            invSel.value = investorLogin;
+          }
         }
 
+        if (sumRes.ok) {
+          const sumData = await sumRes.json();
+          updatePortfolioKPIs(sumData);
+        }
+
+        renderAccounts();
+
+        if (currentPortal === 'client') fetchInvestorData();
+        if (currentPortal === 'referral') fetchPartnerData();
+      } catch (err) {
+        console.error("Error loading portfolio data:", err);
+      }
+    }
+
+    function updatePortfolioKPIs(sumData) {
+      if (!sumData && rawAccounts.length === 0) return;
+
+      let totalMasterEq = 0, totalSlaveEq = 0, totalSlaveCr = 0, totalNetFloat = 0, totalProfit = 0;
+      let onlineCount = 0, spreadLockCount = 0, newsPauseCount = 0;
+
+      rawAccounts.forEach(a => {
+        if (a.is_online) onlineCount++;
+        if (a.shield_status === 'SPREAD-LOCK') spreadLockCount++;
+        if (a.shield_status === 'NEWS-PAUSE') newsPauseCount++;
+
+        totalMasterEq += a.master_equity || 0;
+        totalSlaveEq += a.slave_equity || 0;
+        totalSlaveCr += a.slave_credit || 0;
+        totalNetFloat += a.net_floating || 0;
+
+        const pVal = selectedPeriod === 'today' ? (a.profit_today || 0) :
+                     selectedPeriod === 'week' ? (a.profit_week || 0) :
+                     selectedPeriod === 'month' ? (a.profit_month || 0) : (a.profit_all_time || 0);
+        totalProfit += pVal;
+      });
+
+      document.getElementById('kpi-accounts').textContent = `${onlineCount} / ${rawAccounts.length} Online`;
+      
+      const alertEl = document.getElementById('kpi-shield-alert');
+      if (spreadLockCount > 0) {
+        alertEl.textContent = `⚠️ ${spreadLockCount} Akun Spread-Lock (>60pt)`;
+        alertEl.style.color = 'var(--amber)';
+      } else if (newsPauseCount > 0) {
+        alertEl.textContent = `⛔ ${newsPauseCount} Akun News-Paused (CPI/NFP)`;
+        alertEl.style.color = 'var(--red)';
+      } else {
+        alertEl.textContent = `🛡️ Semua Sistem Normal (v1.24)`;
+        alertEl.style.color = 'var(--green)';
+      }
+
+      document.getElementById('kpi-master-eq').textContent = '$' + formatNumber(totalMasterEq);
+      document.getElementById('kpi-master-rp').textContent = formatRupiah(totalMasterEq * USD_RATE);
+
+      document.getElementById('kpi-slave-eq').textContent = '$' + formatNumber(totalSlaveEq);
+      document.getElementById('kpi-slave-cr').textContent = `Total Bonus Cr: $${formatNumber(totalSlaveCr)}`;
+
+      const netFloatEl = document.getElementById('kpi-net-float');
+      netFloatEl.textContent = (totalNetFloat >= 0 ? '+' : '') + '$' + formatNumber(totalNetFloat);
+      netFloatEl.className = 'kpi-val ' + (totalNetFloat >= 0 ? 'green' : 'red');
+      document.getElementById('kpi-net-rp').textContent = formatRupiah(totalNetFloat * USD_RATE);
+
+      const profitEl = document.getElementById('kpi-realized-profit');
+      profitEl.textContent = (totalProfit >= 0 ? '+' : '') + '$' + formatNumber(totalProfit);
+      profitEl.className = 'kpi-val ' + (totalProfit >= 0 ? 'green' : 'red');
+      document.getElementById('kpi-profit-rp').textContent = formatRupiah(totalProfit * USD_RATE);
+    }
+
+    function renderAccounts() {
+      const container = document.getElementById('accounts-container');
+      if (filteredAccounts.length === 0) {
+        container.innerHTML = `
+          <div style="grid-column: 1 / -1; background: var(--card-bg); border: 1px dashed var(--card-border); border-radius: 16px; padding: 44px 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px;">
+            <div style="font-size: 40px; animation: pulse 2s infinite;">📡</div>
+            <h3 style="font-size: 18px; font-weight: 800; color: #fff;">Menunggu Telemetri MT5 Real Terhubung...</h3>
+            <p style="font-size: 13px; color: var(--text-muted); max-width: 560px; line-height: 1.6;">
+              Dashboard dalam mode <strong>100% Real Live</strong>. Begitu EA Master MT5 mengirim data (setiap 3 detik), akun real beserta live equity, floating, status shield, dan tiket posisi akan otomatis muncul di sini secara real-time.
+            </p>
+            <div style="text-align: left; background: #0b1120; border: 1px solid var(--card-border); border-radius: 10px; padding: 16px 20px; font-size: 12px; line-height: 1.8; color: #cbd5e1; max-width: 560px; width: 100%; box-sizing: border-box;">
+              <strong style="color: #38bdf8;">Langkah Koneksi MT5 Master:</strong><br>
+              1. <strong>Di MT5 Terminal (VPS):</strong> Menu <code>Tools ➔ Options ➔ Expert Advisors</code><br>
+                 &nbsp;&nbsp;&nbsp;Centang <strong>Allow WebRequest for listed URL</strong> dan tambahkan domain dashboard Anda.<br>
+              2. <strong>Di Chart Master EA (F7):</strong><br>
+                 &nbsp;&nbsp;&nbsp;Set <code>InpEnableWebDashboard = true</code><br>
+                 &nbsp;&nbsp;&nbsp;Isi <code>InpWebDashboardUrl = [URL server]/api/telemetry</code>.
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      let accountsToShow = filteredAccounts;
+      const totalPages = Math.ceil(filteredAccounts.length / pageSize) || 1;
+
+      if (viewMode === 'paged') {
+        const startIdx = (currentPage - 1) * pageSize;
+        accountsToShow = filteredAccounts.slice(startIdx, startIdx + pageSize);
+
+        document.getElementById('btn-prev').disabled = currentPage <= 1;
+        document.getElementById('btn-next').disabled = currentPage >= totalPages;
+
+        for (let i = 1; i <= 3; i++) {
+          const btn = document.getElementById(`btn-page-${i}`);
+          if (btn) {
+            btn.style.display = i <= totalPages ? 'flex' : 'none';
+            btn.classList.toggle('active', i === currentPage);
+          }
+        }
+      }
+
+      container.innerHTML = accountsToShow.map(acc => {
+        const netF = acc.net_floating || 0;
+        const netSign = netF >= 0 ? '+' : '';
+        const netColor = netF >= 0 ? 'green' : 'red';
+        const netRp = formatRupiah(netF * USD_RATE);
+
+        const profitVal = selectedPeriod === 'today' ? (acc.profit_today || 0) :
+                          selectedPeriod === 'week' ? (acc.profit_week || 0) :
+                          selectedPeriod === 'month' ? (acc.profit_month || 0) : (acc.profit_all_time || 0);
+        const pSign = profitVal >= 0 ? '+' : '';
+        const pColor = profitVal >= 0 ? 'green' : 'red';
+        const pRp = formatRupiah(profitVal * USD_RATE);
+
+        let shieldBadge = '<span class="badge badge-normal">🛡️ NORMAL</span>';
+        if (acc.shield_status === 'SPREAD-LOCK') {
+          shieldBadge = `<span class="badge badge-spread">⚠️ SPREAD ${acc.cur_spread}pt</span>`;
+        } else if (acc.shield_status === 'NEWS-PAUSE') {
+          shieldBadge = '<span class="badge badge-news">⛔ NEWS-PAUSE</span>';
+        }
+
+        const onlineDot = acc.is_online ? '<span style="color: var(--green);">●</span>' : '<span style="color: var(--text-muted);">○</span>';
+
+        return `
+          <div class="account-card" onclick="openDetailModal('${acc.login}')">
+            <div class="acc-header">
+              <div>
+                <div class="acc-client">${onlineDot} ${acc.client_name}</div>
+                <div class="acc-meta">Pair #${acc.pair_id} · Master #${acc.login} ↔ Slave #${acc.slave_login || '101037'} · ${acc.symbol}</div>
+              </div>
+              <div>${shieldBadge}</div>
+            </div>
+
+            <!-- Master vs Slave Sub-Grid -->
+            <div class="ms-grid">
+              <div class="ms-col">
+                <div class="ms-col-title">MASTER (#${acc.login})</div>
+                <div class="ms-row"><span>Balance:</span><span>$${formatNumber(acc.master_balance)}</span></div>
+                <div class="ms-row"><span>Equity:</span><span style="color: #60a5fa;">$${formatNumber(acc.master_equity)}</span></div>
+                <div class="ms-row"><span>Float:</span><span class="${acc.master_float >= 0 ? 'green' : 'red'}">${acc.master_float >= 0 ? '+' : ''}$${formatNumber(acc.master_float)}</span></div>
+              </div>
+              <div class="ms-col">
+                <div class="ms-col-title">SLAVE (#${acc.slave_login || '101037'})</div>
+                <div class="ms-row"><span>Balance:</span><span>$${formatNumber(acc.slave_balance)}</span></div>
+                <div class="ms-row"><span>Equity:</span><span style="color: #a78bfa;">$${formatNumber(acc.slave_equity)}</span></div>
+                <div class="ms-row"><span>Float:</span><span class="${acc.slave_float >= 0 ? 'green' : 'red'}">${acc.slave_float >= 0 ? '+' : ''}$${formatNumber(acc.slave_float || 0)}</span></div>
+                <div class="ms-row"><span>Bonus Cr:</span><span style="color: var(--amber);">$${formatNumber(acc.slave_credit)}</span></div>
+              </div>
+            </div>
+
+            <!-- Net Floating & Realized Period Profit -->
+            <div class="profit-box">
+              <div class="p-stat">
+                <div class="p-stat-title">NET FLOATING</div>
+                <div class="p-stat-val ${netColor}">${netSign}$${formatNumber(netF)}</div>
+                <div class="p-stat-rp">${netRp}</div>
+              </div>
+              <div class="p-stat">
+                <div class="p-stat-title">REALIZED (${selectedPeriod.toUpperCase()})</div>
+                <div class="p-stat-val ${pColor}">${pSign}$${formatNumber(profitVal)}</div>
+                <div class="p-stat-rp">${pRp}</div>
+              </div>
+            </div>
+
+            <div class="card-footer">
+              <span>Posisi Aktif: <strong>${acc.pairs_count} Pair</strong></span>
+              <button class="btn-detail" onclick="event.stopPropagation(); openDetailModal('${acc.login}')">Detail Posisi ➔</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ----------------------------------------------------
+    // INVESTOR PORTAL LOGIC & RENDER
+    // ----------------------------------------------------
+    function changeInvestorAccount(login) {
+      investorLogin = login;
+      fetchInvestorData();
+    }
+
+    async function fetchInvestorData() {
+      if (!investorLogin) return;
+      try {
+        const res = await fetch(`/api/client/${investorLogin}`);
+        if (!res.ok) throw new Error("Offline");
+        investorData = await res.json();
+        renderInvestorUI(investorData);
+
+        if (currentRole === 'coordinator' || new URLSearchParams(window.location.search).get('role') === 'coordinator') {
+          const box = document.getElementById('coordinator-secret-box');
+          if (box && (box.style.display === 'none' || !box.style.display)) {
+            toggleCoordinatorCard();
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderInvestorUI(d) {
+      document.getElementById('inv-client-name').textContent = d.client_name;
+      document.getElementById('inv-bank-info').textContent = `Rekening Terdaftar: ${d.registered_bank}`;
+
+      const totalEqUSD = d.total_combined_equity || 0;
+      const totalEqRP = totalEqUSD * USD_RATE;
+      document.getElementById('inv-val-rp').textContent = formatRupiah(totalEqRP);
+      document.getElementById('inv-val-usd').textContent = `$${formatNumber(totalEqUSD)} USD`;
+      document.getElementById('inv-roi-text').textContent = `+${d.roi_percent}% ROI Sejak Awal`;
+
+      document.getElementById('inv-deposit-usd').textContent = `$${formatNumber(d.initial_deposit)}`;
+      document.getElementById('inv-deposit-rp').textContent = formatRupiah((d.initial_deposit || 0) * USD_RATE);
+
+      const totalGain = d.profit_all_time || 0;
+      document.getElementById('inv-total-gain-usd').textContent = `+$${formatNumber(totalGain)}`;
+      document.getElementById('inv-total-gain-rp').textContent = `+${formatRupiah(totalGain * USD_RATE)}`;
+
+      const pVal = selectedPeriod === 'today' ? d.profit_today :
+                   selectedPeriod === 'week' ? d.profit_week :
+                   selectedPeriod === 'month' ? d.profit_month : d.profit_all_time;
+      const pSign = (pVal || 0) >= 0 ? '+' : '';
+      const pRP = (pVal || 0) * USD_RATE;
+
+      document.getElementById('inv-period-profit-rp').textContent = `${pSign}${formatRupiah(pRP)}`;
+      document.getElementById('inv-period-profit-usd').textContent = `${pSign}$${formatNumber(pVal)} USD`;
+
+      const netF = d.net_floating || 0;
+      const netFSign = netF >= 0 ? '+' : '';
+      const netFEl = document.getElementById('inv-float-rp');
+      netFEl.textContent = `${netFSign}${formatRupiah(netF * USD_RATE)}`;
+      netFEl.className = (netF >= 0 ? 'green' : 'red');
+      document.getElementById('inv-float-usd').textContent = `${netFSign}$${formatNumber(netF)} USD (Terlindung Hedging)`;
+
+      const pGrossUSD = (pVal || 0);
+      const pGrossRP = pGrossUSD * USD_RATE;
+
+      const clientPct = d.client_share_pct !== undefined ? d.client_share_pct : 60; // 60%
+      const mgmtPct = d.management_fee_pct !== undefined ? d.management_fee_pct : 40; // 40%
+      const coordPct = d.coordinator_margin_pct !== undefined ? d.coordinator_margin_pct : 10; // 10%
+      const masterPct = d.master_fee_pct !== undefined ? d.master_fee_pct : 30; // 30%
+
+      const clientShareUSD = pGrossUSD * (clientPct / 100.0);
+      const clientShareRP = clientShareUSD * USD_RATE;
+
+      const feeUSD = pGrossUSD * (mgmtPct / 100.0);
+      const feeRP = feeUSD * USD_RATE;
+
+      const coordUSD = pGrossUSD * (coordPct / 100.0);
+      const coordRP = coordUSD * USD_RATE;
+
+      const masterUSD = pGrossUSD * (masterPct / 100.0);
+      const masterRP = masterUSD * USD_RATE;
+
+      // Update Public Member View (60/40)
+      const payoutEl = document.getElementById('inv-client-payout-amount');
+      if (payoutEl) payoutEl.textContent = `${pSign}${formatRupiah(clientShareRP)}`;
+
+      const splitGrossEl = document.getElementById('inv-split-gross');
+      if (splitGrossEl) splitGrossEl.textContent = `${pSign}${formatRupiah(pGrossRP)} (${pSign}$${formatNumber(pGrossUSD)})`;
+
+      const splitFeeEl = document.getElementById('inv-split-fee');
+      if (splitFeeEl) splitFeeEl.textContent = `-${formatRupiah(feeRP)} (-$${formatNumber(feeUSD)})`;
+
+      const splitNetEl = document.getElementById('inv-split-net');
+      if (splitNetEl) splitNetEl.textContent = `${pSign}${formatRupiah(clientShareRP)} (${pSign}$${formatNumber(clientShareUSD)})`;
+
+      // Update Secret Coordinator View (10% Margin + 30% Master + 60% Members)
+      const coordProfitRpEl = document.getElementById('coord-profit-rp');
+      if (coordProfitRpEl) coordProfitRpEl.textContent = `${pSign}${formatRupiah(coordRP)}`;
+
+      const coordProfitUsdEl = document.getElementById('coord-profit-usd');
+      if (coordProfitUsdEl) coordProfitUsdEl.textContent = `${pSign}$${formatNumber(coordUSD)} USD (Margin Bersih Anda)`;
+
+      const masterFeeRpEl = document.getElementById('master-fee-rp');
+      if (masterFeeRpEl) masterFeeRpEl.textContent = `${pSign}${formatRupiah(masterRP)}`;
+
+      const masterFeeUsdEl = document.getElementById('master-fee-usd');
+      if (masterFeeUsdEl) masterFeeUsdEl.textContent = `${pSign}$${formatNumber(masterUSD)} USD (Lisensi & Proteksi Hedging)`;
+
+      const coordMembersRpEl = document.getElementById('coord-members-rp');
+      if (coordMembersRpEl) coordMembersRpEl.textContent = `${pSign}${formatRupiah(clientShareRP)}`;
+
+      const coordMembersUsdEl = document.getElementById('coord-members-usd');
+      if (coordMembersUsdEl) coordMembersUsdEl.textContent = `${pSign}$${formatNumber(clientShareUSD)} USD (Hak Bersih Anggota)`;
+
+      // Render Payout Table
+      const hbody = document.getElementById('inv-payout-table-body');
+      const hist = d.payout_history || [];
+      hbody.innerHTML = hist.map(h => `
+        <tr>
+          <td style="color: #fff; font-weight: 600;">${h.date}</td>
+          <td style="color: var(--green); font-weight: 800;">+${formatRupiah(h.amount_rp)}</td>
+          <td style="color: var(--text-muted);">+$${formatNumber(h.amount_usd)}</td>
+          <td style="color: #60a5fa;">${h.bank}</td>
+          <td><span style="background: var(--green-bg); color: var(--green); padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;">🟢 ${h.status}</span></td>
+        </tr>
+      `).join('');
+
+      // Render Live Positions Table for Investor
+      const posBody = document.getElementById('inv-positions-table-body');
+      const posBadges = document.getElementById('inv-positions-badges');
+      const pairs = d.pairs || [];
+      const mLogin = d.master?.login || d.login || '101035';
+      const sLogin = d.slave?.login || '101037';
+
+      if (posBadges) {
+        posBadges.innerHTML = `
+          <span style="font-size: 11px; font-weight: 800; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); padding: 4px 10px; border-radius: 6px;">
+            🔢 ${pairs.length} Layer Posisi Terbuka
+          </span>
+          <span style="font-size: 11px; font-weight: 800; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 10px; border-radius: 6px;">
+            🛡️ 100% Fully Hedged (Delta Neutral)
+          </span>
+        `;
+      }
+
+      if (posBody) {
+        if (pairs.length === 0) {
+          posBody.innerHTML = `
+            <tr>
+              <td colspan="9" style="text-align: center; padding: 24px; color: var(--text-muted);">
+                Saat ini belum ada posisi order yang terbuka (Siklus baru siap dimulai).
+              </td>
+            </tr>
+          `;
+        } else {
+          posBody.innerHTML = pairs.map((p, idx) => {
+            const net = p.net_profit !== undefined ? p.net_profit : ((p.master_profit || 0) + (p.slave_profit || 0));
+            const netColor = net >= 0 ? 'var(--green)' : 'var(--red)';
+            const netSign = net >= 0 ? '+' : '';
+            const mTypeColor = (p.master_type || 'SELL').toUpperCase() === 'BUY' ? '#38bdf8' : '#f87171';
+            const sTypeColor = (p.slave_type || 'BUY').toUpperCase() === 'BUY' ? '#38bdf8' : '#f87171';
+
+            return `
+              <tr>
+                <td style="font-weight: 700; color: #94a3b8;">#${idx + 1}</td>
+                <td>
+                  <strong style="color: ${mTypeColor};">${p.master_type || 'SELL'}</strong>
+                  <span style="font-size: 11px; color: var(--text-muted); margin-left: 4px;">(#${p.master_ticket})</span>
+                  <div style="font-size: 11px; color: #60a5fa;">Master #${mLogin}</div>
+                </td>
+                <td>
+                  <strong style="color: ${sTypeColor};">${p.slave_type || 'BUY'}</strong>
+                  <span style="font-size: 11px; color: var(--text-muted); margin-left: 4px;">(#${p.slave_ticket || 'Hedge'})</span>
+                  <div style="font-size: 11px; color: #a78bfa;">Slave #${sLogin}</div>
+                </td>
+                <td>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #fff;">
+                    M: <strong>${p.master_price ? formatNumber(p.master_price) : '-'}</strong>
+                  </div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #94a3b8;">
+                    S: <strong>${p.slave_price ? formatNumber(p.slave_price) : '-'}</strong>
+                  </div>
+                </td>
+                <td>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #fff;">
+                    M: ${p.master_vol ? p.master_vol.toFixed(2) : '0.10'}L
+                  </div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #94a3b8;">
+                    S: ${p.slave_vol ? p.slave_vol.toFixed(2) : '0.11'}L
+                  </div>
+                </td>
+                <td style="font-family: 'JetBrains Mono', monospace; font-weight: 800; color: ${(p.master_profit||0) >= 0 ? 'var(--green)' : 'var(--red)'};">
+                  ${(p.master_profit||0) >= 0 ? '+' : ''}$${formatNumber(p.master_profit || 0)}
+                </td>
+                <td style="font-family: 'JetBrains Mono', monospace; font-weight: 800; color: ${(p.slave_profit||0) >= 0 ? 'var(--green)' : 'var(--red)'};">
+                  ${(p.slave_profit||0) >= 0 ? '+' : ''}$${formatNumber(p.slave_profit || 0)}
+                </td>
+                <td style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 900; color: ${netColor};">
+                  ${netSign}$${formatNumber(net)}
+                </td>
+                <td>
+                  <span style="background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap;">
+                    🛡️ Hedged
+                  </span>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+      }
+
+      renderInvestorChart(d.chart_data || []);
+    }
+
+    function renderInvestorChart(points) {
+      const container = document.getElementById('inv-chart-container');
+      if (!points || points.length === 0) return;
+
+      const w = 900;
+      const h = 140;
+      const padX = 40;
+      const padY = 20;
+
+      const vals = points.map(p => p.equity);
+      const minV = Math.min(...vals) * 0.98;
+      const maxV = Math.max(...vals) * 1.01;
+
+      const rangeX = (w - padX * 2) / (points.length - 1);
+      const rangeY = (h - padY * 2) / (maxV - minV || 1);
+
+      const coords = points.map((p, i) => {
+        const x = padX + i * rangeX;
+        const y = h - padY - (p.equity - minV) * rangeY;
+        return { x, y, eq: p.equity, date: p.date };
+      });
+
+      let pathD = `M ${coords[0].x} ${coords[0].y}`;
+      for (let i = 1; i < coords.length; i++) {
+        const prev = coords[i - 1];
+        const curr = coords[i];
+        const cp1x = prev.x + (curr.x - prev.x) / 2;
+        const cp1y = prev.y;
+        const cp2x = prev.x + (curr.x - prev.x) / 2;
+        const cp2y = curr.y;
+        pathD += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
+      }
+
+      const areaD = `${pathD} L ${coords[coords.length-1].x} ${h} L ${coords[0].x} ${h} Z`;
+
+      let circles = coords.map(c => 
+        `<circle cx="${c.x}" cy="${c.y}" r="4" fill="#10b981" stroke="#0f172a" stroke-width="2"/>
+         <text x="${c.x}" y="${c.y - 10}" fill="#93c5fd" font-size="10" font-weight="700" font-family="JetBrains Mono" text-anchor="middle">$${formatNumber(c.eq)}</text>
+         <text x="${c.x}" y="${h - 4}" fill="#64748b" font-size="10" font-family="Plus Jakarta Sans" text-anchor="middle">${c.date}</text>`
+      ).join('');
+
+      container.innerHTML = `
+        <svg viewBox="0 0 ${w} ${h}" style="width: 100%; height: 100%; overflow: visible;">
+          <defs>
+            <linearGradient id="invChartGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#10b981" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+            </linearGradient>
+          </defs>
+          <path d="${areaD}" fill="url(#invChartGrad)" />
+          <path d="${pathD}" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" />
+          ${circles}
+        </svg>
+      `;
+    }
+
+    // ----------------------------------------------------
+    // REFERRAL IB PORTAL LOGIC & RENDER
+    // ----------------------------------------------------
+    function changePartnerCode(code) {
+      currentPartnerCode = code;
+      fetchPartnerData();
+    }
+
+    function copyReferralLink() {
+      const el = document.getElementById('ref-input-link');
+      el.select();
+      navigator.clipboard.writeText(el.value);
+      alert('Link referral berhasil disalin ke clipboard:\n' + el.value);
+    }
+
+    async function fetchPartnerData() {
+      try {
+        const res = await fetch(`/api/referral/${currentPartnerCode}`);
+        if (!res.ok) throw new Error("Partner offline");
+        partnerData = await res.json();
+        renderPartnerUI(partnerData);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderPartnerUI(d) {
+      document.getElementById('ref-tier').textContent = d.tier || 'VIP PARTNER';
+      document.getElementById('ref-name').textContent = d.partner_name || 'Partner';
+      document.getElementById('ref-partner-select').value = d.code;
+      document.getElementById('ref-payout-bank').textContent = d.payout_bank;
+      document.getElementById('ref-input-link').value = `${window.location.origin}/?view=client&ref=${d.code}`;
+
+      document.getElementById('ref-total-clients').textContent = `${d.total_referred_clients} Akun Aktif`;
+      document.getElementById('ref-total-equity').textContent = '$' + formatNumber(d.total_referred_equity);
+      document.getElementById('ref-total-equity-rp').textContent = formatRupiah(d.total_referred_equity * USD_RATE);
+      document.getElementById('ref-total-lots').textContent = `${formatNumber(d.total_volume_lots)} Lot`;
+
+      const commVal = selectedPeriod === 'today' ? d.commission_today :
+                      selectedPeriod === 'week' ? d.commission_week :
+                      selectedPeriod === 'month' ? d.commission_month : d.commission_all_time;
+      document.getElementById('ref-comm-val').textContent = `+$${formatNumber(commVal)}`;
+      document.getElementById('ref-comm-rp').textContent = `+${formatRupiah(commVal * USD_RATE)}`;
+
+      const tbody = document.getElementById('ref-downline-tbody');
+      const clients = d.clients || [];
+
+      if (clients.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada client terdaftar di bawah kode referral ini.</td></tr>';
+      } else {
+        tbody.innerHTML = clients.map(c => `
+          <tr>
+            <td style="color: #60a5fa; font-weight: 700;">#${c.login}</td>
+            <td style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; color: #fff;">${c.client_name}</td>
+            <td>$${formatNumber(c.equity)}</td>
+            <td>${formatNumber(c.estimated_lots)} Lot</td>
+            <td class="${c.profit_all_time >= 0 ? 'green' : 'red'}">${c.profit_all_time >= 0 ? '+' : ''}$${formatNumber(c.profit_all_time)}</td>
+            <td class="amber" style="font-weight: 800;">+$${formatNumber(c.partner_commission_earned)}</td>
+            <td><span style="color: var(--green); font-weight: 700;">● Aktif</span></td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    // ----------------------------------------------------
+    // MODAL DEEP DIVE (Manager Mode)
+    // ----------------------------------------------------
+    async function openDetailModal(login) {
+      const modal = document.getElementById('detail-modal');
+      const body = document.getElementById('modal-body');
+      modal.style.display = 'flex';
+      body.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 30px;">Mengambil data tiket...</div>';
+
+      try {
+        const res = await fetch(`/api/status/${login}`);
+        if (!res.ok) throw new Error("Account offline");
         const d = await res.json();
-        const isOnline = d.is_online;
-        document.getElementById('status-dot').className = isOnline ? 'live-dot' : 'offline-dot';
-        document.getElementById('status-text').textContent = isOnline ? 'ONLINE' : 'STANDBY';
-        document.getElementById('status-text').style.color = isOnline ? 'var(--green)' : 'var(--red)';
+
+        document.getElementById('modal-title').textContent = `${d.client_name || 'Account #' + login}`;
+        document.getElementById('modal-subtitle').textContent = `Pair ID #${d.pair_id} · Symbol: ${d.symbol} · Target TP: $${d.target_tp}`;
 
         const m = d.master || {};
         const s = d.slave || {};
         const pairs = d.pairs || [];
 
-        // Master Equity & Balance
-        document.getElementById('m-equity').textContent = '$' + formatNumber(m.equity);
-        document.getElementById('m-bal-cr').textContent = `Bal ${formatNumber(m.balance)} · Cr 0,00`;
-        document.getElementById('m-margin-level').textContent = (m.margin_level || 0).toFixed(2) + '%';
+        const pTotal = d.profit_all_time || 0;
+        const memShareUSD = pTotal * 0.60;
+        const coordShareUSD = pTotal * 0.10;
+        const masterShareUSD = pTotal * 0.30;
 
-        // Slave Equity & Balance & Credit
-        document.getElementById('s-equity').textContent = '$' + formatNumber(s.equity);
-        const crVal = (s.equity && s.balance && s.equity > s.balance) ? (s.equity - s.balance) : (s.balance ? s.balance * 0.20 : 0);
-        document.getElementById('s-bal-cr').textContent = `Bal ${formatNumber(s.balance)} · Cr ${formatNumber(crVal)}`;
-        document.getElementById('s-margin-level').textContent = (s.margin_level || 0).toFixed(2) + '%';
+        body.innerHTML = `
+          <div class="ms-grid">
+            <div class="ms-col">
+              <div class="ms-col-title">MASTER STATUS</div>
+              <div class="ms-row"><span>Login:</span><span>${m.login || login}</span></div>
+              <div class="ms-row"><span>Equity:</span><span>$${formatNumber(m.equity)}</span></div>
+              <div class="ms-row"><span>Free Margin:</span><span>$${formatNumber(m.free_margin)}</span></div>
+              <div class="ms-row"><span>Margin Level:</span><span>${(m.margin_level||0).toFixed(1)}%</span></div>
+            </div>
+            <div class="ms-col">
+              <div class="ms-col-title">SLAVE STATUS</div>
+              <div class="ms-row"><span>Login:</span><span>${s.login || 'Slave'}</span></div>
+              <div class="ms-row"><span>Equity:</span><span>$${formatNumber(s.equity)}</span></div>
+              <div class="ms-row"><span>Credit:</span><span>$${formatNumber(s.credit)}</span></div>
+              <div class="ms-row"><span>Margin Level:</span><span>${(s.margin_level||0).toFixed(1)}%</span></div>
+            </div>
+          </div>
 
-        // Bid / Ask
-        if (pairs.length > 0) {
-          const p0 = pairs[0];
-          document.getElementById('m-bidask').textContent = `${(p0.master_price||0).toFixed(2)}/${((p0.master_price||0)+0.28).toFixed(2)}`;
-          document.getElementById('s-bidask').textContent = `${(p0.slave_price||0).toFixed(2)}/${((p0.slave_price||0)+0.28).toFixed(2)}`;
-        }
-
-        // MC Calculation
-        const mFree = m.free_margin || 0;
-        const sFree = s.free_margin || 0;
-        const mLot = pairs.reduce((sum, p) => sum + (p.master_vol || 0), 0);
-        const sLot = pairs.reduce((sum, p) => sum + (p.slave_vol || 0), 0);
-
-        if (mLot > 0) {
-          const mDist = (mFree / (mLot * 100));
-          const mMCPrice = (pairs[0].master_price || 4600) + mDist;
-          document.getElementById('m-mc').textContent = `@${mMCPrice.toFixed(2)}`;
-          document.getElementById('m-mc-pips').textContent = `+${(mDist * 10).toFixed(1)} pips`;
-        }
-        if (sLot > 0) {
-          const sDist = (sFree / (sLot * 100));
-          const sMCPrice = (pairs[0].slave_price || 4600) - sDist;
-          document.getElementById('s-mc').textContent = `@${sMCPrice.toFixed(2)}`;
-          document.getElementById('s-mc-pips').textContent = `-${(sDist * 10).toFixed(1)} pips`;
-        }
-
-        // Header Counts
-        document.getElementById('pair-count').textContent = pairs.length;
-        document.getElementById('pos-ms').textContent = `${m.count || 0}/${s.count || 0}`;
-
-        // Render Positions List
-        const listEl = document.getElementById('positions-list');
-        if (pairs.length === 0) {
-          listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 25px;">Menunggu posisi aktif...</div>';
-        } else {
-          listEl.innerHTML = pairs.map(p => {
-            const mProf = p.master_profit || 0;
-            const sProf = p.slave_profit || 0;
-            const netProf = p.net_profit || 0;
-
-            const mSign = mProf >= 0 ? '+' : '';
-            const sSign = sProf >= 0 ? '+' : '';
-            const netSign = netProf >= 0 ? '+' : '-';
-
-            const mColor = mProf >= 0 ? 'green-text' : 'red-text';
-            const sColor = sProf >= 0 ? 'green-text' : 'red-text';
-            const netColor = netProf >= 0 ? 'green-text' : 'red-text';
-
-            const mRp = formatRupiah(mProf * USD_RATE);
-            const sRp = formatRupiah(sProf * USD_RATE);
-            const netRp = formatRupiah(Math.abs(netProf) * USD_RATE);
-
-            return `
-              <div class="pos-card">
-                <div class="pos-tickets">
-                  #${p.master_ticket} S ${p.master_vol}@${p.master_price} ⇄ #${p.slave_ticket} B ${p.slave_vol}@${p.slave_price}
-                </div>
-                <div class="pos-legs">
-                  <span>M <span class="${mColor}">${mSign}$${formatNumber(Math.abs(mProf))}</span> <span style="font-size:11px;">≈${mRp}</span></span>
-                  <span>S <span class="${sColor}">${sSign}$${formatNumber(Math.abs(sProf))}</span> <span style="font-size:11px;">≈${sRp}</span></span>
-                </div>
-                <div class="pos-net-row ${netColor}">
-                  ${netSign}$${formatNumber(Math.abs(netProf))} <span style="font-size:12px; font-weight:700;">≈${netSign}${netRp}</span>
-                </div>
+          <!-- Skema Settlement Konsorsium 60/10/30 -->
+          <div style="background: #0f172a; border: 1px solid var(--card-border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 13px; font-weight: 800; color: #fff;">🏛️ SKEMA SETTLEMENT KONSORSIUM (PROFIT SHARING 60 / 10 / 30)</span>
+              <span style="font-size: 10px; font-weight: 700; color: var(--amber); background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); padding: 2px 8px; border-radius: 4px;">KONSORSIUM MODEL</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; font-size: 12px; margin-top: 4px;">
+              <div style="background: rgba(30, 41, 59, 0.5); padding: 10px; border-radius: 8px; border-left: 3px solid var(--green);">
+                <div style="color: var(--green); font-weight: 800; font-size: 11px;">HAK ANGGOTA (60%)</div>
+                <div style="font-size: 14px; font-weight: 900; color: #fff; margin-top: 2px;">${(memShareUSD>=0?'+':'')}$${formatNumber(memShareUSD)}</div>
+                <div style="font-size: 10px; color: var(--text-muted);">${(memShareUSD>=0?'+':'')}${formatRupiah(memShareUSD * USD_RATE)}</div>
               </div>
-            `;
-          }).join('');
-        }
-      } catch (e) {
-        console.error("Fetch dashboard error:", e);
+              <div style="background: rgba(30, 41, 59, 0.5); padding: 10px; border-radius: 8px; border-left: 3px solid var(--amber);">
+                <div style="color: var(--amber); font-weight: 800; font-size: 11px;">KOORDINATOR (10%)</div>
+                <div style="font-size: 14px; font-weight: 900; color: #fbbf24; margin-top: 2px;">${(coordShareUSD>=0?'+':'')}$${formatNumber(coordShareUSD)}</div>
+                <div style="font-size: 10px; color: var(--text-muted);">${(coordShareUSD>=0?'+':'')}${formatRupiah(coordShareUSD * USD_RATE)}</div>
+              </div>
+              <div style="background: rgba(30, 41, 59, 0.5); padding: 10px; border-radius: 8px; border-left: 3px solid #60a5fa;">
+                <div style="color: #60a5fa; font-weight: 800; font-size: 11px;">MASTER / ANDA (30%)</div>
+                <div style="font-size: 14px; font-weight: 900; color: #93c5fd; margin-top: 2px;">${(masterShareUSD>=0?'+':'')}$${formatNumber(masterShareUSD)}</div>
+                <div style="font-size: 10px; color: var(--text-muted);">${(masterShareUSD>=0?'+':'')}${formatRupiah(masterShareUSD * USD_RATE)}</div>
+              </div>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-top: 2px;">
+              * Anggota konsorsium hanya melihat fee 40% secara total. Selisih 10% menjadi komisi rahasia koordinator tanpa diketahui anggota.
+            </div>
+          </div>
+
+          <div style="font-size: 13px; font-weight: 800; color: #fff; margin-top: 6px;">
+            RINCIAN HEDGE TIKET (${pairs.length} PASANGAN)
+          </div>
+
+          <table class="pos-table">
+            <thead>
+              <tr>
+                <th>Master Tiket</th>
+                <th>Slave Tiket</th>
+                <th>M. Profit</th>
+                <th>S. Profit</th>
+                <th>Net ($)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${pairs.length === 0 ? '<tr><td colspan="5" style="text-align:center; padding: 20px;">Tidak ada order terbuka</td></tr>' : pairs.map(p => {
+                const net = p.net_profit || 0;
+                const netColor = net >= 0 ? 'green' : 'red';
+                return `
+                  <tr>
+                    <td>#${p.master_ticket} (${p.master_vol}L @${p.master_price})</td>
+                    <td>#${p.slave_ticket} (${p.slave_vol}L @${p.slave_price})</td>
+                    <td class="${p.master_profit >= 0 ? 'green' : 'red'}">${p.master_profit >= 0 ? '+' : ''}$${formatNumber(p.master_profit)}</td>
+                    <td class="${p.slave_profit >= 0 ? 'green' : 'red'}">${p.slave_profit >= 0 ? '+' : ''}$${formatNumber(p.slave_profit)}</td>
+                    <td class="${netColor}" style="font-weight: 800;">${net >= 0 ? '+' : ''}$${formatNumber(net)}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        body.innerHTML = `<div style="text-align: center; color: var(--red); padding: 30px;">Gagal memuat detail akun: ${err.message}</div>`;
       }
     }
 
-    loadAccounts();
-    setInterval(loadAccounts, 5000);
-    setInterval(fetchDashboard, 1000);
+    function toggleCoordinatorCard() {
+      const box = document.getElementById('coordinator-secret-box');
+      const btn = document.getElementById('btn-toggle-coord');
+      if (!box) return;
+      if (box.style.display === 'none' || !box.style.display) {
+        box.style.display = 'block';
+        btn.innerHTML = '🔒 Tutup Rincian Koordinator';
+        btn.style.background = 'rgba(239, 68, 68, 0.15)';
+        btn.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        btn.style.color = '#f87171';
+      } else {
+        box.style.display = 'none';
+        btn.innerHTML = '🔐 Buka Rincian Koordinator';
+        btn.style.background = 'rgba(245, 158, 11, 0.1)';
+        btn.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+        btn.style.color = 'var(--amber)';
+      }
+    }
+
+    function closeModal(e) {
+      if (!e || e.target.id === 'detail-modal' || e.target.classList.contains('modal-close')) {
+        document.getElementById('detail-modal').style.display = 'none';
+      }
+    }
+
+    // Initialize portal view
+    switchPortal(currentPortal);
+    loadPortfolioData();
+    setInterval(loadPortfolioData, 2000);
   </script>
 </body>
 </html>

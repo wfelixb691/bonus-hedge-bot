@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.22"
+#property version   "1.24"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -13,6 +13,9 @@
 //--- Input Parameters
 input group "=== IDENTITAS PASANGAN TRADING (ANTI-TABRAKAN) ==="
 input int      InpPairID            = 1;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
+input string   InpClientName        = "Client #1";   // Nama Client / Investor (e.g. Bpk. Hendra)
+input string   InpReferralCode      = "";            // Kode Referral Partner / IB (e.g. PARTNER01, kosongkan jika mandiri)
+
 
 input group "=== GRID STRATEGY PARAMETERS ==="
 input string   InpSymbol            = "XAUUSD";      // Trading Symbol
@@ -31,7 +34,16 @@ input group "=== MARGIN & CIRCUIT BREAKER PROTECTIONS ==="
 input double   InpMinMarginLevel    = 150.0;         // Min Margin Level % (Stop opening if below)
 input double   InpMinFreeMargin     = 150.0;         // Min Free Margin $ (Stop opening if below)
 input bool     InpHarvestOnSlaveMC  = true;          // Auto Close Master if Slave hits Margin Call/StopOut
-input int      InpUnhedgedWatchdogSec = 7;           // Unhedged Watchdog Timeout (Seconds, 0 = Disabled)
+input int      InpUnhedgedWatchdogSec = 15;          // Unhedged Watchdog Timeout (Seconds, 0 = Disabled)
+
+input group "=== BIG NEWS & SPREAD VOLATILITY SHIELD ==="
+input double   InpMaxSpreadPoints   = 60.0;          // Max Spread Points Allowed for Open & TP ($0.60 on Gold)
+input bool     InpEnableSpikeVelocity = true;        // Enable Spike Velocity Guard (Anti-Catch Falling Knife)
+input double   InpSpikeVelocityUSD  = 8.00;          // Spike Candle Threshold ($ USD Range in 1-Minute Bar)
+input int      InpSpikeCooldownMin  = 10;            // Spike Cooldown Duration (Minutes)
+input bool     InpAutoNewsFilter    = true;          // Auto Economic News Filter (MQL5 Calendar)
+input int      InpNewsPauseBeforeMin = 15;           // News Pause Before High-Impact USD (Minutes)
+input int      InpNewsPauseAfterMin  = 15;           // News Pause After High-Impact USD (Minutes)
 
 input group "=== TELEGRAM LIVE REPORT SETTINGS ==="
 input bool     InpEnableTelegram       = true;                    // Enable Telegram Live Alerts
@@ -84,6 +96,7 @@ long           m_slave_time         = 0;
 long           m_slave_login        = 0;
 double         m_slave_equity       = 0.0;
 double         m_slave_balance      = 0.0;
+double         m_slave_credit       = 0.0;
 double         m_slave_free_margin  = 0.0;
 double         m_slave_margin_level = 0.0;
 double         m_slave_profit       = 0.0;
@@ -99,6 +112,14 @@ int            m_rapid_close_counter    = 0;
 datetime       m_circuit_breaker_until  = 0;
 string         m_circuit_breaker_reason = "";
 bool           m_naked_alert_sent       = false;
+
+//--- Big News & Volatility Guard State
+datetime       m_spike_cooldown_until   = 0;
+string         m_spike_reason           = "";
+datetime       m_news_pause_until       = 0;
+string         m_news_title             = "";
+bool           m_spread_freeze_logged   = false;
+
 void   ReadSlaveState();
 void   CheckIncomingCommands();
 bool   CheckSlaveLiquidationHarvest();
@@ -113,6 +134,21 @@ void   SendTelegramMessage(string raw_message);
 void   SendWebTelemetry();
 void   CheckSlaveTimeout();
 void   CheckNakedExposureAlert();
+bool   IsSpreadAcceptable();
+bool   IsMasterPosition(ulong ticket);
+
+bool IsMasterPosition(ulong ticket)
+{
+   if(ticket <= 0) return false;
+   string pos_sym = PositionGetString(POSITION_SYMBOL);
+   if(StringCompare(pos_sym, m_symbol, false) != 0 && StringCompare(pos_sym, _Symbol, false) != 0)
+      return false;
+   long magic = PositionGetInteger(POSITION_MAGIC);
+   if(magic == (long)m_magic) return true;
+   if(magic == 888111 || magic == 888101) return true; // Legacy v1.20/v1.21/v1.22
+   if(InpIncludeManualTrades && magic == 0) return true;
+   return false;
+}
 
 void InitPairConfiguration()
 {
@@ -150,12 +186,15 @@ int OnInit()
    m_last_order_close_time = 0;
    m_rapid_close_counter   = 0;
    m_circuit_breaker_until = 0;
-   Print("🟢 [BonusHedge_Master v1.22] Initialized on ", m_symbol, " (Pair ID: ", InpPairID, ", Magic: ", m_magic, ")");
+   Print("🟢 [BonusHedge_Master v1.24] Initialized on ", m_symbol, " (Pair ID: ", InpPairID, ", Magic: ", m_magic, ")");
+
+   // Set Chart Foreground Text to Bright Yellow for maximum crisp readability
+   ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);
 
    // Immediate startup test ping to Telegram
    if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
    {
-      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.22 AKTIF]</b>\n" +
+      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.24 AKTIF]</b>\n" +
                           "👑 Akun Master: <b>" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "</b>\n" +
                           "📌 Pair ID: <b>#" + IntegerToString(InpPairID) + "</b> (Magic: " + IntegerToString(m_magic) + ")\n" +
                           "📊 Symbol: <b>" + m_symbol + "</b> | Base Lot: <b>" + DoubleToString(InpInitialLot, 2) + "L</b>\n" +
@@ -173,6 +212,7 @@ void OnDeinit(const int reason)
    EventKillTimer();
    FileDelete(m_master_file, FILE_COMMON);
    ObjectDelete(0, "BTN_RESUME_CYCLE");
+   ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrWhite);
    Comment("");
 }
 
@@ -297,8 +337,13 @@ void ReadSlaveState()
    int    new_pos_count   = 0;
 
    if(ok) { ResetLastError(); new_login       = FileReadLong(file_handle);   ok = (GetLastError() == 0); }
+   double new_credit      = 0.0;
    if(ok) { ResetLastError(); new_equity      = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
    if(ok) { ResetLastError(); new_balance     = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
+   if(new_version >= 3)
+   {
+      if(ok) { ResetLastError(); new_credit   = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
+   }
    if(ok) { ResetLastError(); new_free_margin = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
    if(ok) { ResetLastError(); new_margin_lvl  = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
    if(ok) { ResetLastError(); new_profit      = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
@@ -366,7 +411,7 @@ void ReadSlaveState()
    FileClose(file_handle);
 
    // Payload tidak valid / versi beda: jaga snapshot terakhir yang bagus
-   if(!ok || new_magic != 0x42484246 || new_version != 2)
+   if(!ok || new_magic != 0x42484246 || (new_version != 2 && new_version != 3))
    {
       CheckSlaveTimeout();
       return;
@@ -384,6 +429,7 @@ void ReadSlaveState()
    m_slave_login        = new_login;
    m_slave_equity       = new_equity;
    m_slave_balance      = new_balance;
+   m_slave_credit       = (new_version >= 3) ? new_credit : ((new_equity > new_balance) ? (new_equity - new_balance) : 0.0);
    m_slave_free_margin  = new_free_margin;
    m_slave_margin_level = new_margin_lvl;
    m_slave_profit       = new_profit;
@@ -432,9 +478,7 @@ void CheckNakedExposureAlert()
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
-      if(ticket > 0
-         && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-         && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpIncludeManualTrades && PositionGetInteger(POSITION_MAGIC) == 0)))
+      if(IsMasterPosition(ticket))
          master_count++;
    }
    if(master_count == 0)
@@ -571,6 +615,111 @@ void CheckUnhedgedOrphanWatchdog()
 }
 
 //+------------------------------------------------------------------+
+//| SPREAD-LOCK GUARD: Memeriksa apakah spread dalam batas aman       |
+//| Mencegah eksekusi close TP dan entry baru saat spread mekar liar  |
+//+------------------------------------------------------------------+
+bool IsSpreadAcceptable()
+{
+   if(InpMaxSpreadPoints <= 0) return true;
+   long cur_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
+   if(cur_spread > (long)InpMaxSpreadPoints)
+   {
+      static datetime s_last_spread_log = 0;
+      if(TimeCurrent() - s_last_spread_log >= 5)
+      {
+         Print("🛡️ [SPREAD-LOCK ACTIVE] Spread ", m_symbol, " = ", cur_spread,
+               " poin > batas ", (long)InpMaxSpreadPoints, " poin ($", DoubleToString(InpMaxSpreadPoints * m_point, 2),
+               "). Menahan eksekusi untuk mencegah slippage!");
+         s_last_spread_log = TimeCurrent();
+      }
+      return false;
+   }
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| SPIKE VELOCITY GUARD: Mendeteksi lonjakan lilin M1 liar           |
+//| Mencegah bot membuka posisi di dasar jurang / pucuk spike berita  |
+//+------------------------------------------------------------------+
+bool CheckSpikeVelocity()
+{
+   if(!InpEnableSpikeVelocity || InpSpikeVelocityUSD <= 0) return false;
+
+   if(TimeCurrent() < m_spike_cooldown_until)
+      return true;
+
+   MqlRates rates[];
+   ArraySetAsSeries(rates, true);
+   int copied = CopyRates(m_symbol, PERIOD_M1, 0, 2, rates);
+   if(copied >= 1)
+   {
+      double cur_range = (rates[0].high - rates[0].low);
+      double prev_range = (copied >= 2) ? (rates[1].high - rates[1].low) : 0.0;
+      double max_range = MathMax(cur_range, prev_range);
+
+      if(max_range >= InpSpikeVelocityUSD)
+      {
+         m_spike_cooldown_until = TimeCurrent() + (InpSpikeCooldownMin * 60);
+         m_spike_reason = "Spike $" + DoubleToString(max_range, 2) + " >= $" + DoubleToString(InpSpikeVelocityUSD, 2) + " in M1";
+         Print("🚨 [SPIKE VELOCITY GUARD] Terdeteksi lilin lonjakan liar (", m_spike_reason,
+               ")! Mengaktifkan Cooldown selama ", InpSpikeCooldownMin, " menit.");
+         return true;
+      }
+   }
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| ECONOMIC CALENDAR NEWS FILTER: Kalender Ekonomi Otomatis MT5     |
+//| Jeda otomatis sebelum & sesudah berita High Impact USD            |
+//+------------------------------------------------------------------+
+bool IsHighImpactNewsNearby()
+{
+   if(!InpAutoNewsFilter) return false;
+
+   static datetime s_last_calendar_check = 0;
+   static bool     s_is_news_nearby      = false;
+
+   datetime now = TimeCurrent();
+   if(now < m_news_pause_until)
+      return true;
+
+   if(now - s_last_calendar_check < 10)
+      return s_is_news_nearby;
+
+   s_last_calendar_check = now;
+   s_is_news_nearby = false;
+
+   datetime from_time = now - (InpNewsPauseAfterMin * 60);
+   datetime to_time   = now + (InpNewsPauseBeforeMin * 60);
+
+   MqlCalendarValue values[];
+   ResetLastError();
+   int count = CalendarValueHistory(values, from_time, to_time, "US", "USD");
+   if(count > 0)
+   {
+      for(int i = 0; i < count; i++)
+      {
+         MqlCalendarEvent event;
+         if(CalendarEventById(values[i].event_id, event))
+         {
+            if(event.importance == CALENDAR_IMPORTANCE_HIGH)
+            {
+               m_news_pause_until = values[i].time + (InpNewsPauseAfterMin * 60);
+               m_news_title = event.name;
+               s_is_news_nearby = true;
+               Print("📰 [HIGH-IMPACT NEWS DETECTED] Acara: '", m_news_title, "' dijadwalkan pada ",
+                     TimeToString(values[i].time, TIME_DATE|TIME_MINUTES), ". Grid dikunci hingga ",
+                     TimeToString(m_news_pause_until, TIME_DATE|TIME_MINUTES));
+               return true;
+            }
+         }
+      }
+   }
+   return false;
+}
+
+//+------------------------------------------------------------------+
 //| Main Grid Strategy Execution                                     |
 //+------------------------------------------------------------------+
 void ManageGrid()
@@ -584,12 +733,10 @@ void ManageGrid()
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
-      if(ticket > 0
-         && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-         && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpIncludeManualTrades && PositionGetInteger(POSITION_MAGIC) == 0)))
+      if(IsMasterPosition(ticket))
       {
          total_positions++;
-         if(PositionGetInteger(POSITION_MAGIC) == (long)m_magic)
+         if(PositionGetInteger(POSITION_MAGIC) == (long)m_magic || PositionGetInteger(POSITION_MAGIC) == 888111)
             ea_positions++;
          total_profit += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
          double open_p = PositionGetDouble(POSITION_PRICE_OPEN);
@@ -624,10 +771,23 @@ void ManageGrid()
       return;
    }
 
+   // WEEKEND / MARKET CLOSED LOCK:
+   MqlDateTime dt_loc;
+   TimeToStruct(TimeLocal(), dt_loc);
+   if(dt_loc.day_of_week == 0 || dt_loc.day_of_week == 6) return; // Silent & standby on weekends!
+
    double combined_net_profit = total_profit + m_slave_profit;
 
    if(total_positions > 0 && m_slave_pos_count > 0 && effective_basket_tp > 0 && combined_net_profit >= effective_basket_tp)
    {
+      // SPREAD-LOCK PROTECTION:
+      // Tahan eksekusi TP jika spread sedang mekar (misal saat CPI spike 200-500 poin).
+      // Tunggu spread kembali normal (<= InpMaxSpreadPoints) agar profit bersih tidak tergerus spread liar!
+      if(!IsSpreadAcceptable())
+      {
+         return; // Tunda close basket sampai spread aman
+      }
+
       Print("🎉 [COMBINED NET TP TRIGGERED] Total Gabungan (Master: $", DoubleToString(total_profit, 2),
             " + Slave: $", DoubleToString(m_slave_profit, 2), ") = $", DoubleToString(combined_net_profit, 2),
             " >= Target $", DoubleToString(effective_basket_tp, 2), " (Base $", DoubleToString(base_tp_amount, 2),
@@ -699,6 +859,16 @@ void ManageGrid()
    // Cooldown between orders (10 seconds) and Closing Lock guard
    if(TimeCurrent() < m_closing_lock_until) return;
    if(TimeCurrent() - m_last_order_time < 10) return;
+
+   // --- BIG NEWS & SPREAD VOLATILITY SHIELD ---
+   // 1. Spread-Lock Guard: Dilarang buka order baru jika spread sedang mekar liar
+   if(!IsSpreadAcceptable()) return;
+
+   // 2. Spike Velocity Guard: Dilarang buka order baru saat lilin M1 meledak liar (anti-tangkap pisau jatuh)
+   if(CheckSpikeVelocity()) return;
+
+   // 3. Economic Calendar Filter: Dilarang buka order baru 15 menit sebelum & sesudah High Impact USD news
+   if(IsHighImpactNewsNearby()) return;
 
    MqlTick tick;
    if(!SymbolInfoTick(m_symbol, tick) || tick.bid <= 0) return;
@@ -787,9 +957,7 @@ void CloseAllMasterPositions()
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
-      if(ticket > 0
-         && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-         && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpIncludeManualTrades && PositionGetInteger(POSITION_MAGIC) == 0)))
+      if(IsMasterPosition(ticket))
       {
          if(m_trade.PositionClose(ticket)) closed_count++;
       }
@@ -844,9 +1012,7 @@ void BroadcastMasterState()
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
-      if(ticket > 0
-         && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-         && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpIncludeManualTrades && PositionGetInteger(POSITION_MAGIC) == 0)))
+      if(IsMasterPosition(ticket))
       {
          ArrayResize(tickets,  count + 1);
          ArrayResize(types,    count + 1);
@@ -987,9 +1153,7 @@ void UpdateDashboard()
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
-      if(ticket > 0
-         && PositionGetString(POSITION_SYMBOL) == m_symbol
-         && PositionGetInteger(POSITION_MAGIC) == (long)m_magic)
+      if(IsMasterPosition(ticket))
       {
          total_positions++;
          total_profit += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
@@ -1020,7 +1184,7 @@ void UpdateDashboard()
    }
    else if(total_positions > 0)
    {
-      status_str = "✅ GRID ACTIVE (SYNC 50ms)";
+      status_str = "✅ GRID ACTIVE (SYNC 50ms) - Floating: " + (comb_profit >= 0 ? "+$" : "-$") + DoubleToString(MathAbs(comb_profit), 2);
       ObjectDelete(0, "BTN_RESUME_CYCLE");
    }
    else if(AccountInfoDouble(ACCOUNT_MARGIN_FREE) < InpMinFreeMargin || (AccountInfoDouble(ACCOUNT_MARGIN_LEVEL) > 0 && AccountInfoDouble(ACCOUNT_MARGIN_LEVEL) < InpMinMarginLevel))
@@ -1028,9 +1192,14 @@ void UpdateDashboard()
       status_str = "⚠️ PAUSED: Master Margin Rendah ($" + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_FREE), 2) + ") - Harap Rebalance!";
       ObjectDelete(0, "BTN_RESUME_CYCLE");
    }
-   else if(m_slave_online && (m_slave_balance <= 0.0 || m_slave_equity < 100.0 || m_slave_free_margin < InpMinFreeMargin || (m_slave_margin_level > 0 && m_slave_margin_level < InpMinMarginLevel)))
+   else if(m_slave_online && m_slave_balance <= 0.0)
    {
-      status_str = "⚠️ PAUSED: Slave Saldo/Balance Minus (Bal: $" + DoubleToString(m_slave_balance, 2) + ", Eq: $" + DoubleToString(m_slave_equity, 2) + ") - Harap Reset/Deposit!";
+      status_str = "⚠️ PAUSED: Slave Saldo Habis/Nol ($" + DoubleToString(m_slave_balance, 2) + ") - Harap Reset/Deposit!";
+      ObjectDelete(0, "BTN_RESUME_CYCLE");
+   }
+   else if(m_slave_online && (m_slave_free_margin < InpMinFreeMargin || (m_slave_margin_level > 0 && m_slave_margin_level < InpMinMarginLevel)))
+   {
+      status_str = "⚠️ PAUSED: Slave Margin Kritis (Free: $" + DoubleToString(m_slave_free_margin, 2) + ", Lvl: " + DoubleToString(m_slave_margin_level, 1) + "%) - Proteksi Margin Aktif!";
       ObjectDelete(0, "BTN_RESUME_CYCLE");
    }
    else
@@ -1038,9 +1207,18 @@ void UpdateDashboard()
       ObjectDelete(0, "BTN_RESUME_CYCLE");
    }
 
+   long cur_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
+   string shield_info = "NORMAL (" + IntegerToString(cur_spread) + "pts)";
+   if(cur_spread > (long)InpMaxSpreadPoints)
+      shield_info = "🛡️ SPREAD-LOCK (" + IntegerToString(cur_spread) + " > " + IntegerToString((long)InpMaxSpreadPoints) + "pts)";
+   else if(TimeCurrent() < m_spike_cooldown_until)
+      shield_info = "🚨 SPIKE COOLDOWN (" + IntegerToString((int)(m_spike_cooldown_until - TimeCurrent())) + "s)";
+   else if(IsHighImpactNewsNearby())
+      shield_info = "📰 NEWS PAUSE (" + m_news_title + ")";
+
    string text = "\n" +
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
-      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.22             ║\n" +
+      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.24             ║\n" +
       "  ╠════════════════════════════════════════════════════════════════╣\n" +
       "    Pair Group ID   : #" + IntegerToString(InpPairID) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
       "    Bridge Files    : " + m_master_file + " <-> " + m_slave_file + "\n" +
@@ -1052,11 +1230,13 @@ void UpdateDashboard()
       "    Master Floating : $" + DoubleToString(total_profit, 2) + "\n" +
       "    Net Combined P/L: $" + (comb_profit >= 0 ? "+" : "") + DoubleToString(comb_profit, 2) + "\n" +
       "    Target Basket TP: $" + DoubleToString(eff_target_tp, 2) + " (Base $" + DoubleToString(base_tp, 2) + " + Flat Buffer $" + DoubleToString(InpSpreadBufferUSD, 2) + ")\n" +
+      "    News/Spread     : " + shield_info + "\n" +
       "  ────────────────────────────────────────────────────────────────\n" +
       "    🔗 SLAVE TELEMETRY: " + slave_info + "\n" +
       "    Status          : " + status_str + "\n" +
       "  ╚════════════════════════════════════════════════════════════════╝\n";
 
+   ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);
    Comment(text);
 
    // Periodic Telegram Snapshot
@@ -1069,7 +1249,7 @@ void UpdateDashboard()
          for(int i = PositionsTotal() - 1; i >= 0; i--)
          {
             ulong t = PositionGetTicket(i);
-            if(t > 0 && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0) && PositionGetInteger(POSITION_MAGIC) == (long)m_magic)
+            if(IsMasterPosition(t))
             {
                double p_prof = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
                string p_sign = (p_prof >= 0) ? "+$" : "-$";
@@ -1182,13 +1362,42 @@ void SendTelegramMessage(string raw_message)
 }
 
 //+------------------------------------------------------------------+
+//| Helper: Calculate Realized Profit from MT5 Closed Deal History   |
+//+------------------------------------------------------------------+
+double GetRealizedProfit(datetime from_time)
+{
+   if(!HistorySelect(from_time, TimeCurrent())) return 0.0;
+   int total_deals = HistoryDealsTotal();
+   double sum_profit = 0.0;
+   for(int i = 0; i < total_deals; i++)
+   {
+      ulong ticket = HistoryDealGetTicket(i);
+      if(ticket > 0)
+      {
+         long entry = HistoryDealGetInteger(ticket, DEAL_ENTRY);
+         if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_INOUT)
+         {
+            long deal_type = HistoryDealGetInteger(ticket, DEAL_TYPE);
+            if(deal_type == DEAL_TYPE_BUY || deal_type == DEAL_TYPE_SELL)
+            {
+               sum_profit += HistoryDealGetDouble(ticket, DEAL_PROFIT)
+                           + HistoryDealGetDouble(ticket, DEAL_SWAP)
+                           + HistoryDealGetDouble(ticket, DEAL_COMMISSION);
+            }
+         }
+      }
+   }
+   return sum_profit;
+}
+
+//+------------------------------------------------------------------+
 //| Helper: Stream Real-Time JSON Telemetry to Cloud Web API         |
 //+------------------------------------------------------------------+
 void SendWebTelemetry()
 {
    if(!InpEnableWebDashboard || StringLen(InpWebDashboardUrl) == 0) return;
-   if(TimeCurrent() - m_last_web_time < InpWebIntervalSec) return;
-   m_last_web_time = TimeCurrent();
+   if(TimeLocal() - m_last_web_time < InpWebIntervalSec) return;
+   m_last_web_time = TimeLocal();
 
    int total_positions = 0;
    double total_profit = 0.0;
@@ -1197,9 +1406,7 @@ void SendWebTelemetry()
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
-      if(ticket > 0
-         && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-         && PositionGetInteger(POSITION_MAGIC) == (long)m_magic)
+      if(IsMasterPosition(ticket))
       {
          total_positions++;
          double p_prof = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
@@ -1244,10 +1451,40 @@ void SendWebTelemetry()
    if(InpAutoScaleLot) base_tp_calc = (balance / 1000.0) * InpBasketTPDollars;
    double eff_telemetry_tp = (base_tp_calc > 0) ? (base_tp_calc + InpSpreadBufferUSD) : 0.0;
 
+   long cur_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
+   string shield_status = "NORMAL";
+   if(cur_spread > (long)InpMaxSpreadPoints) shield_status = "SPREAD_LOCK";
+   else if(TimeCurrent() < m_spike_cooldown_until) shield_status = "SPIKE_COOLDOWN";
+   else if(IsHighImpactNewsNearby()) shield_status = "NEWS_PAUSE";
+
+   // Calculate real closed deal profits from MT5 History
+   datetime t_now = TimeCurrent();
+   MqlDateTime dt;
+   TimeToStruct(t_now, dt);
+   dt.hour = 0; dt.min = 0; dt.sec = 0;
+   datetime t_today = StructToTime(dt);
+   datetime t_week  = t_today - (dt.day_of_week * 86400);
+   dt.day = 1;
+   datetime t_month = StructToTime(dt);
+
+   double prof_today = GetRealizedProfit(t_today);
+   double prof_week  = GetRealizedProfit(t_week);
+   double prof_month = GetRealizedProfit(t_month);
+   double prof_all   = GetRealizedProfit(0);
+
    string payload = "{\"login\":" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) +
+                    ",\"client_name\":\"" + InpClientName + "\"" +
+                    ",\"referral_code\":\"" + InpReferralCode + "\"" +
                     ",\"symbol\":\"" + m_symbol + "\"" +
+                    ",\"pair_id\":" + IntegerToString(InpPairID) +
+                    ",\"shield_status\":\"" + shield_status + "\"" +
+                    ",\"cur_spread\":" + IntegerToString(cur_spread) +
                     ",\"net_floating\":" + DoubleToString(net_fl, 2) +
                     ",\"target_tp\":" + DoubleToString(eff_telemetry_tp, 2) +
+                    ",\"profit_today\":" + DoubleToString(prof_today, 2) +
+                    ",\"profit_week\":" + DoubleToString(prof_week, 2) +
+                    ",\"profit_month\":" + DoubleToString(prof_month, 2) +
+                    ",\"profit_all_time\":" + DoubleToString(prof_all, 2) +
                     ",\"master\":{\"login\":" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) +
                                  ",\"equity\":" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2) +
                                  ",\"balance\":" + DoubleToString(balance, 2) +
@@ -1258,19 +1495,34 @@ void SendWebTelemetry()
                     ",\"slave\":{\"login\":" + IntegerToString(m_slave_login) +
                                 ",\"equity\":" + DoubleToString(m_slave_equity, 2) +
                                 ",\"balance\":" + DoubleToString(m_slave_balance, 2) +
+                                ",\"credit\":" + DoubleToString(m_slave_credit, 2) +
                                 ",\"free_margin\":" + DoubleToString(m_slave_free_margin, 2) +
                                 ",\"margin_level\":" + DoubleToString(m_slave_margin_level, 2) +
                                 ",\"profit\":" + DoubleToString(m_slave_profit, 2) +
                                 ",\"count\":" + IntegerToString(m_slave_pos_count) + "}" +
                     ",\"pairs\":[" + pairs_json + "]}";
 
-   string headers = "Content-Type: application/json\r\n";
+   string headers = "Content-Type: application/json\r\nBypass-Tunnel-Reminder: true\r\nUser-Agent: MT5-BonusBot\r\n";
    char post_data[], result[];
    string result_headers;
    StringToCharArray(payload, post_data, 0, WHOLE_ARRAY, CP_UTF8);
    ArrayResize(post_data, ArraySize(post_data) - 1);
 
    ResetLastError();
-   WebRequest("POST", InpWebDashboardUrl, headers, 1000, post_data, result, result_headers);
+   int http_res = WebRequest("POST", InpWebDashboardUrl, headers, 4000, post_data, result, result_headers);
+   if(http_res != 200)
+   {
+      int err = GetLastError();
+      static datetime last_diag_time = 0;
+      if(TimeLocal() - last_diag_time >= 15)
+      {
+         last_diag_time = TimeLocal();
+         PrintFormat("⚠️ [WebDashboard] Telemetry failed! HTTP=%d | Error=%d | URL: %s", http_res, err, InpWebDashboardUrl);
+         if(err == 4014)
+         {
+            Print("❌ [WebDashboard] Error 4014: Domain belum di-whitelist di MT5! Buka Tools -> Options -> Expert Advisors -> Allow WebRequest for listed URL.");
+         }
+      }
+   }
 }
 
