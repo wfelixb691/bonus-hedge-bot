@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.24"
+#property version   "1.27"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -15,7 +15,7 @@ input group "=== IDENTITAS PASANGAN TRADING (ANTI-TABRAKAN) ==="
 input int      InpPairID            = 1;             // Pair Group ID (Samakan dengan Master: 1, 2, 3, dst)
 
 input group "=== SLAVE HEDGING PARAMETERS ==="
-input double   InpLotMultiplier     = 1.10;          // Lot Multiplier (e.g. 0.15 Master -> 0.17 Slave)
+input double   InpLotMultiplier     = 1.10;          // Lot Multiplier (1.10 = Asymmetrical Bonus Harvest, 1.00 = 1:1)
 input double   InpMinBonusCredit    = 100.0;         // Min Bonus Credit $ Required to Start (0 = Disabled)
 
 //--- Internal Engine Constants (Fixed for Optimal Stability & Zero User Error)
@@ -49,8 +49,12 @@ string         m_symbol             = "";
 double         m_point              = 0.01;
 int            m_digits             = 2;
 bool           m_closing_active     = false;
+bool           m_trade_blocked      = false;  // Slave tidak bisa eksekusi order (algo off / circuit breaker) -> disiarkan ke Master
+bool           m_pending_close_all  = false;  // Slave Self-Defense: Tahan CLOSE_ALL jika spread sedang mekar liar
+ulong          m_pending_close_start_tick = 0;// Waktu mulai penundaan CLOSE_ALL
 
 // Anti-Flapping & Circuit Breaker Tracking
+datetime       m_cycle_start_time       = 0;  // v1.27: Waktu awal siklus Slave (hanya dicatat saat hedge pertama)
 datetime       m_last_order_open_time   = 0;
 datetime       m_last_order_close_time  = 0;
 int            m_rapid_close_counter    = 0;
@@ -88,6 +92,7 @@ void   SyncOpenPositions();
 void   SyncClosePositions();
 double GetSlaveTotalProfit();
 void   CloseAllSlavePositions();
+void   ProcessPendingCloseAll();
 void   SendCommandToMaster(string cmd);
 void   CheckIncomingCommands();
 void   UpdateDashboard(double slave_profit, double combined_net_profit);
@@ -140,7 +145,23 @@ bool IsSlaveHedgePosition(ulong ticket)
    if(StringFind(pos_sym, "XAU", 0) < 0 && StringFind(pos_sym, "xau", 0) < 0 &&
       StringCompare(pos_sym, m_symbol, false) != 0 && StringCompare(pos_sym, _Symbol, false) != 0)
       return false;
-   return true; // Any Gold position on this dedicated Slave terminal belongs to this hedge
+
+   // STRICT MULTI-PAIR ISOLATION:
+   // Pastikan posisi ini 100% milik Pair ini (Magic Number atau Comment Prefix).
+   // Mencegah Slave salah mendeteksi posisi dari chart/pair lain di terminal yang sama!
+   long pos_magic = PositionGetInteger(POSITION_MAGIC);
+   if(pos_magic == (long)m_magic)
+      return true;
+
+   string pos_cmt = PositionGetString(POSITION_COMMENT);
+   if(StringFind(pos_cmt, m_comment_prefix) >= 0)
+      return true;
+
+   // Fallback: jika broker menghapus magic & comment dan hanya ada 1 EA di terminal ini
+   if(InpPairID <= 1 && pos_magic == 0 && StringFind(pos_cmt, "CT") < 0)
+      return true;
+
+   return false;
 }
 
 void InitPairConfiguration()
@@ -180,7 +201,7 @@ int OnInit()
    m_circuit_breaker_until = 0;
    ArrayResize(m_missing_tickets, 0);
 
-   Print("🟢 [BonusHedge_Slave v1.24] Initialized on ", m_symbol,
+   Print("🟢 [BonusHedge_Slave v1.25] Initialized on ", m_symbol,
          " (Pair ID: #", InpPairID, ", Magic: ", m_magic, ", Mult: ", DoubleToString(InpLotMultiplier, 2), "x)");
 
    // Set Chart Foreground Text to Bright Yellow for maximum crisp readability
@@ -212,6 +233,7 @@ void OnTimer()
    //     agar Master tetap melihat Slave hidup walau algo sedang OFF)
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED))
    {
+      m_trade_blocked = true; // Sinyal ke Master: jangan buka layer baru!
       Comment("\n  ⚠️ [BonusHedge_Slave] ALGO TRADING IS DISABLED IN MT5!\n" +
               "  Klik tombol 'Algo Trading' di toolbar atas MT5 agar robot bisa bekerja.");
       return;
@@ -228,11 +250,21 @@ void OnTimer()
       return;
    }
 
+   // Master online & algo trading aktif -> Slave siap eksekusi lagi
+   m_trade_blocked = false;
+
    // 2b. Deteksi broker menimpa comment -> mode backstop bucket matching
    DetectCommentLoss();
 
    // 3. Check for incoming commands from Master (e.g. CLOSE_ALL Take Profit)
    CheckIncomingCommands();
+   if(m_pending_close_all)
+   {
+      ProcessPendingCloseAll();
+      double sp = GetSlaveTotalProfit();
+      UpdateDashboard(sp, m_master_profit + sp);
+      return;
+   }
 
    // 4. Calculate Slave Floating & Combined Net Profit
    double slave_profit        = GetSlaveTotalProfit();
@@ -295,7 +327,7 @@ void BroadcastSlaveState()
    static long s_slave_counter = 0;
    s_slave_counter++;
    FileWriteLong(file_handle, 0x42484246);       // magic "BHBF"
-   FileWriteLong(file_handle, 3);                // protocol version 3 (includes credit)
+   FileWriteLong(file_handle, 5);                // protocol version 5 (credit + trade-block flag + live spread)
    FileWriteLong(file_handle, s_slave_counter);  // heartbeat counter
    FileWriteLong(file_handle, AccountInfoInteger(ACCOUNT_LOGIN));
    FileWriteDouble(file_handle, AccountInfoDouble(ACCOUNT_EQUITY));
@@ -309,9 +341,15 @@ void BroadcastSlaveState()
       reported_free_margin = 0.0; // Sinyal ke Master: Bonus belum masuk!
       reported_margin_lvl  = 0.0;
    }
+   // v3+ trade-block flag: Master v1.25+ membaca ini & menahan order baru saat Slave tak bisa eksekusi.
+   // (Master lama yang tidak mengenal flag ini akan gagal mem-validasi payload v3 -> memperlakukan Slave
+   //  sebagai offline -> gagal-aman, bukan salah hedging. JANGAN campur versi Master lama + Slave baru.)
+   FileWriteInteger(file_handle, (m_trade_blocked ? 1 : 0));
    FileWriteDouble(file_handle, reported_free_margin);
    FileWriteDouble(file_handle, reported_margin_lvl);
    FileWriteDouble(file_handle, total_prof);
+   long cur_slave_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
+   FileWriteLong(file_handle, cur_slave_spread); // v5: live spread points
    FileWriteInteger(file_handle, count);
 
    for(int i = 0; i < count; i++)
@@ -484,6 +522,21 @@ bool CheckMasterLiquidationHarvest()
    if(!m_master_online || m_closing_active) return false;
 
    static int s_master_mc_counter = 0;
+
+   // Panen likuidasi hanya relevan jika Slave memang sedang memegang posisi hedge terbuka!
+   int my_pos_count = 0;
+   for(int s = PositionsTotal() - 1; s >= 0; s--)
+   {
+      ulong ticket = PositionGetTicket(s);
+      if(ticket > 0 && IsSlaveHedgePosition(ticket))
+         my_pos_count++;
+   }
+   if(my_pos_count == 0)
+   {
+      s_master_mc_counter = 0;
+      return false;
+   }
+
    // GENUINE LIQUIDATION HARVEST:
    // Panen hanya boleh dipicu jika Equity Master benar-benar menyentuh sisa terakhir (<= $10.0) atau sudah minus.
    bool is_master_liquidated = (m_master_login > 0 && m_master_equity <= 10.0);
@@ -524,7 +577,7 @@ void SyncOpenPositions()
    TimeToStruct(TimeLocal(), dt_loc);
    if(dt_loc.day_of_week == 0 || dt_loc.day_of_week == 6) return; // Total quiet on weekends!
 
-   if(TimeCurrent() < m_circuit_breaker_until) return;
+   if(TimeCurrent() < m_circuit_breaker_until) { m_trade_blocked = true; return; }
    if(TimeCurrent() < m_closing_lock_until) return;
    if(TimeCurrent() - m_last_order_close_time < 10) return; // 10s cooldown after close
 
@@ -601,12 +654,12 @@ void SyncOpenPositions()
             ulong s_ticket = PositionGetTicket(s);
             if(IsSlaveHedgePosition(s_ticket))
             {
-               string cmt = PositionGetString(POSITION_COMMENT);
-               if(cmt == expected_comment || (StringFind(cmt, "CT#") < 0 && MathAbs(PositionGetDouble(POSITION_VOLUME) - want_lot) < 0.005))
-               {
-                  already_hedged = true;
-                  break;
-               }
+                string cmt = PositionGetString(POSITION_COMMENT);
+                if(cmt == expected_comment || StringFind(cmt, expected_comment) >= 0)
+                {
+                   already_hedged = true;
+                   break;
+                }
             }
          }
       }
@@ -653,18 +706,34 @@ void SyncOpenPositions()
          s_last_hedged_tick_ms       = GetTickCount64();
 
          bool order_ok = false;
-         if(m_master_positions[m_idx].type == 1) // Master SELL -> Slave BUY
+         for(int retry = 0; retry < 3; retry++)
          {
-            order_ok = m_trade.Buy(slave_lot, m_symbol, tick.ask, 0, 0, expected_comment);
-         }
-         else if(m_master_positions[m_idx].type == 0) // Master BUY -> Slave SELL
-         {
-            order_ok = m_trade.Sell(slave_lot, m_symbol, tick.bid, 0, 0, expected_comment);
+            if(!SymbolInfoTick(m_symbol, tick)) break;
+            if(m_master_positions[m_idx].type == 1) // Master SELL -> Slave BUY
+            {
+               order_ok = m_trade.Buy(slave_lot, m_symbol, tick.ask, 0, 0, expected_comment);
+            }
+            else if(m_master_positions[m_idx].type == 0) // Master BUY -> Slave SELL
+            {
+               order_ok = m_trade.Sell(slave_lot, m_symbol, tick.bid, 0, 0, expected_comment);
+            }
+
+            if(order_ok) break;
+
+            uint rc = m_trade.ResultRetcode();
+            // Jika penolakan karena pasar tutup, terminal trade disabled, atau algo off: stop retry
+            if(rc == TRADE_RETCODE_MARKET_CLOSED || rc == TRADE_RETCODE_CLIENT_DISABLES_AT || rc == TRADE_RETCODE_TRADE_DISABLED)
+               break;
+
+            Print("⚠️ [HEDGE RETRY ", (retry + 1), "/3] Slave gagal buka order (Code=", rc,
+                  " ", m_trade.ResultComment(), "). Mencoba ulang dalam 300ms...");
+            Sleep(300);
          }
 
          if(order_ok)
          {
-            m_last_order_open_time      = TimeCurrent();
+            m_last_order_open_time = TimeCurrent();
+            if(my_hedge_count == 0) m_cycle_start_time = TimeCurrent(); // v1.27: Catat awal siklus Slave
             Print("✅ [HEDGE OPEN SUCCESS] Master #", m_ticket, " -> Slave ", slave_lot, "L (", expected_comment, ")");
          }
          else
@@ -672,7 +741,7 @@ void SyncOpenPositions()
             s_last_hedged_master_ticket = 0;
             s_last_hedged_tick_ms       = 0;
             uint retcode = m_trade.ResultRetcode();
-            Print("🚨 [HEDGE FAILED] Slave gagal buka order (Code=", retcode,
+            Print("🚨 [HEDGE FAILED] Slave gagal buka order setelah 3x percobaan (Code=", retcode,
                   " ", m_trade.ResultComment(), ")");
             // HANYA kirim CLOSE_ALL jika bukan karena pasar tutup atau auto-trading mati!
             if(retcode != TRADE_RETCODE_MARKET_CLOSED && retcode != TRADE_RETCODE_CLIENT_DISABLES_AT)
@@ -820,17 +889,18 @@ void CloseAllSlavePositions()
    if(closed_count > 0)
    {
       m_last_order_close_time = TimeCurrent();
-      int lifespan = (m_last_order_open_time > 0) ? (int)(TimeCurrent() - m_last_order_open_time) : 999;
+      int cycle_lifespan = (m_cycle_start_time > 0) ? (int)(TimeCurrent() - m_cycle_start_time) : 999;
 
-      if(m_last_order_open_time > 0 && lifespan <= 20)
+      // SHIELD: Umur siklus Slave dihitung dari hedge posisi pertama (m_cycle_start_time)
+      if(m_cycle_start_time > 0 && cycle_lifespan <= 20)
       {
          m_rapid_close_counter++;
-         Print("⚠️ [SLAVE ANTI-FLAPPING] Buka-tutup kilat (Umur: ", lifespan, "s). Counter: ", m_rapid_close_counter);
+         Print("⚠️ [SLAVE ANTI-FLAPPING] Siklus kilat abnormal (Umur Siklus: ", cycle_lifespan, "s). Counter: ", m_rapid_close_counter);
 
          if(m_rapid_close_counter >= 2)
          {
             m_circuit_breaker_until = TimeCurrent() + 300; // 5 Menit Lockout
-            m_circuit_breaker_reason = "Terdeteksi 2x Buka-Tutup Kilat (<20s)";
+            m_circuit_breaker_reason = "Terdeteksi 2x Siklus Kilat Abnormal (<20s)";
             Print("🚨 [SLAVE CIRCUIT BREAKER ACTIVATED] Slave dikunci PAUSE selama 5 menit untuk melindungi modal!");
          }
       }
@@ -838,6 +908,7 @@ void CloseAllSlavePositions()
       {
          m_rapid_close_counter = 0;
       }
+      m_cycle_start_time = 0; // Reset waktu siklus setelah seluruh posisi ditutup
    }
 }
 
@@ -905,12 +976,47 @@ void CheckIncomingCommands()
 
    if(cmd == "CLOSE_ALL" && !m_closing_active)
    {
-      Print("🚨 [SLAVE] Received CLOSE_ALL command from Master #", sender_login, "! Closing all positions.");
-      m_closing_active = true;
-      m_closing_lock_until = TimeCurrent() + 6;
-      CloseAllSlavePositions();
-      m_closing_active = false;
+      m_pending_close_all = true;
+      m_pending_close_start_tick = GetTickCount64();
+      Print("🚨 [SLAVE] Received CLOSE_ALL command from Master #", sender_login, "! Evaluating spread before close...");
+      ProcessPendingCloseAll();
    }
+}
+
+//+------------------------------------------------------------------+
+//| SLAVE SELF-DEFENSE SPREAD GUARD (v1.26)                          |
+//| Tahan eksekusi CLOSE_ALL jika spread broker Slave sedang mekar   |
+//| liar saat FOMC/CPI. Maksimal penundaan 15 detik agar aman.       |
+//+------------------------------------------------------------------+
+void ProcessPendingCloseAll()
+{
+   if(!m_pending_close_all || m_closing_active) return;
+
+   long cur_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
+   bool spread_ok  = (MAX_SPREAD_POINTS <= 0 || cur_spread <= (long)MAX_SPREAD_POINTS);
+   ulong elapsed_ms = GetTickCount64() - m_pending_close_start_tick;
+   bool timeout    = (elapsed_ms >= 15000); // 15 detik batas timeout darurat
+
+   if(!spread_ok && !timeout)
+   {
+      static datetime s_last_defense_log = 0;
+      if(TimeCurrent() - s_last_defense_log >= 2)
+      {
+         Print("🛡️ [SLAVE SPREAD DEFENSE] Spread Slave = ", cur_spread,
+               " pts > batas ", (long)MAX_SPREAD_POINTS, " pts. Menahan CLOSE_ALL (",
+               (int)(15 - (elapsed_ms / 1000)), "s tersisa) agar profit tidak tergerus slippage liar!");
+         s_last_defense_log = TimeCurrent();
+      }
+      return;
+   }
+
+   m_pending_close_all = false;
+   m_closing_active = true;
+   m_closing_lock_until = TimeCurrent() + 6;
+   Print("🚨 [SLAVE] Mengeksekusi CLOSE_ALL (Spread Slave: ", cur_spread, " pts",
+         (timeout ? " - Timeout Darurat 15s Tercapai" : " - Spread Aman"), ")!");
+   CloseAllSlavePositions();
+   m_closing_active = false;
 }
 
 //+------------------------------------------------------------------+
@@ -935,6 +1041,12 @@ void UpdateDashboard(double slave_profit, double combined_net_profit)
       int remain_sec = (int)(m_circuit_breaker_until - TimeCurrent());
       status_str = "🛑 CIRCUIT BREAKER PAUSE (" + IntegerToString(remain_sec) + "s) - " + m_circuit_breaker_reason;
    }
+   else if(m_pending_close_all)
+   {
+      long cur_sp = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
+      int rem_s = (int)MathMax(0, 15 - (GetTickCount64() - m_pending_close_start_tick) / 1000);
+      status_str = "🛡️ SPREAD DEFENSE: Menahan Close (" + IntegerToString(cur_sp) + "pts > 60pts | Sisa: " + IntegerToString(rem_s) + "s)";
+   }
    else if(InpMinBonusCredit > 0 && my_credit < InpMinBonusCredit && slave_pos_count == 0)
    {
       status_str = "⏳ PAUSED: Menunggu Bonus Broker Masuk (Credit: $" + DoubleToString(my_credit, 2) + " < $" + DoubleToString(InpMinBonusCredit, 2) + ")";
@@ -942,7 +1054,7 @@ void UpdateDashboard(double slave_profit, double combined_net_profit)
 
    string text = "\n" +
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
-      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - SLAVE LP ENGINE v1.24           ║\n" +
+      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - SLAVE LP ENGINE v1.27           ║\n" +
       "  ╠════════════════════════════════════════════════════════════════╣\n" +
       "    Pair Group ID   : #" + IntegerToString(InpPairID) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
       "    Bridge Files    : " + m_master_file + " <-> " + m_slave_file + "\n" +

@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.24"
+#property version   "1.27"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -26,12 +26,12 @@ input int      InpMaxLayers         = 3;             // Maximum Grid Layers (Max
 
 input group "=== TAKE PROFIT & SPREAD BUFFER ==="
 input double   InpBasketTPDollars   = 31.74;         // Master Basket TP ($ Base per 0.10 Lot)
-input double   InpSpreadBufferUSD   = 25.0;          // Flat Spread & Slippage Buffer (USD Flat, Not Multiplied)
+input double   InpSpreadBufferUSD   = 35.0;          // Flat Spread & Slippage Buffer (USD Flat, Not Multiplied)
 input bool     InpPauseAfterCycle   = true;          // Pause Trading After 1 Cycle Closed (For EA Update/Maintenance)
 input bool     InpIncludeManualTrades = true;        // Include Manual Positions (Magic 0) in Basket TP & Close
 
 input group "=== MARGIN & CIRCUIT BREAKER PROTECTIONS ==="
-input double   InpMinMarginLevel    = 150.0;         // Min Margin Level % (Stop opening if below)
+input double   InpMinMarginLevel    = 100.0;         // Min Margin Level % (Stop opening if below)
 input double   InpMinFreeMargin     = 150.0;         // Min Free Margin $ (Stop opening if below)
 input bool     InpHarvestOnSlaveMC  = true;          // Auto Close Master if Slave hits Margin Call/StopOut
 input int      InpUnhedgedWatchdogSec = 15;          // Unhedged Watchdog Timeout (Seconds, 0 = Disabled)
@@ -46,7 +46,7 @@ input int      InpNewsPauseBeforeMin = 15;           // News Pause Before High-I
 input int      InpNewsPauseAfterMin  = 15;           // News Pause After High-Impact USD (Minutes)
 
 input group "=== TELEGRAM LIVE REPORT SETTINGS ==="
-input bool     InpEnableTelegram       = true;                    // Enable Telegram Live Alerts
+input bool     InpEnableTelegram       = false;                   // Enable Telegram Live Alerts
 input string   InpTelegramBotToken     = "8841891391:AAFZX-wQSRd2oXOq5Qw52mWAkq_MPxO72_0"; // Telegram Bot Token
 input string   InpTelegramChatID       = "164419860";             // Telegram Chat ID
 input int      InpTelegramIntervalMin  = 5;                       // Periodic Report Interval (Minutes)
@@ -102,16 +102,20 @@ double         m_slave_margin_level = 0.0;
 double         m_slave_profit       = 0.0;
 int            m_slave_pos_count    = 0;
 bool           m_slave_online       = false;
+bool           m_slave_trade_blocked = false;   // v1.25: Slave melapor tidak bisa eksekusi (algo OFF / CB)
+long           m_slave_spread       = 0;       // v1.26: Live spread broker Slave (pts)
 long           m_slave_last_counter = -1;
 datetime       m_slave_last_seen    = 0;
 
 //--- Universal Anti-Flapping Circuit Breaker Shield
+datetime       m_cycle_start_time       = 0;       // v1.27: Waktu awal siklus (hanya dicatat saat Layer 1 buka)
 datetime       m_last_order_open_time   = 0;
 datetime       m_last_order_close_time  = 0;
 int            m_rapid_close_counter    = 0;
 datetime       m_circuit_breaker_until  = 0;
 string         m_circuit_breaker_reason = "";
 bool           m_naked_alert_sent       = false;
+bool           m_blocked_alert_sent     = false;   // v1.25: alert Slave trade-blocked (sekali per episode)
 
 //--- Big News & Volatility Guard State
 datetime       m_spike_cooldown_until   = 0;
@@ -145,7 +149,9 @@ bool IsMasterPosition(ulong ticket)
       return false;
    long magic = PositionGetInteger(POSITION_MAGIC);
    if(magic == (long)m_magic) return true;
-   if(magic == 888111 || magic == 888101) return true; // Legacy v1.20/v1.21/v1.22
+   // STRICT MULTI-PAIR ISOLATION (v1.27):
+   // Toleransi magic lama hanya berlaku untuk Pair 1. Pair 2 (888102) DILARANG keras menyentuh magic 888101!
+   if(InpPairID <= 1 && (magic == 888111 || magic == 888101)) return true;
    if(InpIncludeManualTrades && magic == 0) return true;
    return false;
 }
@@ -186,7 +192,7 @@ int OnInit()
    m_last_order_close_time = 0;
    m_rapid_close_counter   = 0;
    m_circuit_breaker_until = 0;
-   Print("🟢 [BonusHedge_Master v1.24] Initialized on ", m_symbol, " (Pair ID: ", InpPairID, ", Magic: ", m_magic, ")");
+   Print("🟢 [BonusHedge_Master v1.25] Initialized on ", m_symbol, " (Pair ID: ", InpPairID, ", Magic: ", m_magic, ")");
 
    // Set Chart Foreground Text to Bright Yellow for maximum crisp readability
    ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);
@@ -338,15 +344,26 @@ void ReadSlaveState()
 
    if(ok) { ResetLastError(); new_login       = FileReadLong(file_handle);   ok = (GetLastError() == 0); }
    double new_credit      = 0.0;
+   int    new_trade_blocked = 0;
    if(ok) { ResetLastError(); new_equity      = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
    if(ok) { ResetLastError(); new_balance     = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
    if(new_version >= 3)
    {
       if(ok) { ResetLastError(); new_credit   = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
    }
+   if(new_version >= 4)
+   {
+      // v4: Slave melaporkan kemampuan eksekusi (1 = algo OFF / circuit breaker)
+      if(ok) { ResetLastError(); new_trade_blocked = FileReadInteger(file_handle); ok = (GetLastError() == 0); }
+   }
    if(ok) { ResetLastError(); new_free_margin = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
    if(ok) { ResetLastError(); new_margin_lvl  = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
    if(ok) { ResetLastError(); new_profit      = FileReadDouble(file_handle); ok = (GetLastError() == 0); }
+   long new_slave_spread = 0;
+   if(new_version >= 5)
+   {
+      if(ok) { ResetLastError(); new_slave_spread = FileReadLong(file_handle); ok = (GetLastError() == 0); }
+   }
    if(ok) { ResetLastError(); new_pos_count   = FileReadInteger(file_handle); ok = (GetLastError() == 0); }
 
    // Baca ke array paralel primitif (struct ber-string tidak boleh lokal di MQL5)
@@ -411,7 +428,7 @@ void ReadSlaveState()
    FileClose(file_handle);
 
    // Payload tidak valid / versi beda: jaga snapshot terakhir yang bagus
-   if(!ok || new_magic != 0x42484246 || (new_version != 2 && new_version != 3))
+   if(!ok || new_magic != 0x42484246 || (new_version != 2 && new_version != 3 && new_version != 4 && new_version != 5))
    {
       CheckSlaveTimeout();
       return;
@@ -434,6 +451,8 @@ void ReadSlaveState()
    m_slave_margin_level = new_margin_lvl;
    m_slave_profit       = new_profit;
    m_slave_pos_count    = new_pos_count;
+   m_slave_trade_blocked = (new_version >= 4 && new_trade_blocked != 0);
+   m_slave_spread        = (new_version >= 5) ? new_slave_spread : 0;
    ArrayResize(m_slave_positions, new_pos_count);
    for(int i = 0; i < new_pos_count; i++)
    {
@@ -509,6 +528,21 @@ bool CheckSlaveLiquidationHarvest()
    if(!m_slave_online || m_closing_active) return false;
 
    static int s_slave_mc_counter = 0;
+
+   // Panen likuidasi hanya relevan jika Master memang sedang memegang posisi terbuka!
+   int master_count = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket > 0 && IsMasterPosition(ticket))
+         master_count++;
+   }
+   if(master_count == 0)
+   {
+      s_slave_mc_counter = 0;
+      return false;
+   }
+
    // GENUINE LIQUIDATION HARVEST:
    // Jangan gunakan ambang Margin Level < 20%! Pada akumulasi 3-4 layer (lot besar), ML 20% terjadi saat
    // Equity masih tersisa $100-$150, sehingga bot menutup terlalu dini sebelum bonus broker terbakar habis!
@@ -580,55 +614,82 @@ void CheckUnhedgedOrphanWatchdog()
 
    static ulong s_unhedged_start_tick = 0;
 
-   // Jika Master memiliki posisi lebih banyak daripada yang berhasil di-hedge oleh Slave
-   if(master_count > 0 && master_count > m_slave_pos_count)
+   // 1. Kondisi normal: Master dan Slave seimbang -> RESET TIMER WATCHDOG KE 0! (v1.27 FIX)
+   if(master_count == 0 || master_count <= m_slave_pos_count)
    {
-      if(s_unhedged_start_tick == 0)
-      {
-         s_unhedged_start_tick = GetTickCount64();
-      }
-      else if(GetTickCount64() - s_unhedged_start_tick > (ulong)(InpUnhedgedWatchdogSec * 1000))
-      {
-         Print("🚨 [UNHEDGED WATCHDOG TRIGGERED] Master memiliki ", master_count, " posisi tapi Slave hanya meng-hedge ",
-               m_slave_pos_count, " posisi selama > ", InpUnhedgedWatchdogSec, " detik! Menutup posisi unhedged demi keselamatan modal!");
-         m_closing_active = true;
-         m_closing_lock_until = TimeCurrent() + 6;
-         CloseAllMasterPositions();
-         m_closing_active = false;
-         m_last_order_time = TimeCurrent();
-         s_unhedged_start_tick = 0;
+      s_unhedged_start_tick = 0;
+      if(!m_slave_trade_blocked) m_blocked_alert_sent = false;
+      return;
+   }
 
+   // 2. Kondisi Slave trade-blocked (algo OFF / CB) -> Tahan, jangan bunuh posisi
+   if(m_slave_trade_blocked)
+   {
+      s_unhedged_start_tick = 0; // Reset watchdog agar tidak menumpuk saat blocked
+      if(!m_blocked_alert_sent)
+      {
+         m_blocked_alert_sent = true;
+         Print("🚫 [SLAVE TRADE-BLOCKED] Slave online tapi tidak bisa eksekusi order (Algo OFF / Circuit Breaker). Grid DITAHAN - tidak ada watchdog close.");
          if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
          {
-            SendTelegramMessage("🚨 <b>[UNHEDGED WATCHDOG TRIGGERED]</b>\n" +
+            SendTelegramMessage("🚫 <b>[SLAVE TIDAK BISA EKSEKUSI]</b>\n" +
                                 "────────────────────────────\n" +
-                                "⚠️ Ditemukan posisi Master yang tidak di-hedge oleh Slave selama > " + IntegerToString(InpUnhedgedWatchdogSec) + " detik.\n" +
-                                "🛡️ <b>Posisi Master ditutup otomatis demi keselamatan modal!</b>\n" +
+                                "⚠️ Slave online tapi <b>Algo Trading OFF / Circuit Breaker aktif</b> di terminal Slave.\n" +
+                                "🛡️ Grid <b>DITAHAN</b> - tidak ada order baru (proteksi spread FOMC). Posisi existing tetap ter-hedge & aman.\n" +
+                                "👉 Nyalakan tombol Algo Trading di terminal Slave, bot lanjut otomatis.\n" +
                                 "⏰ <i>" + TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS) + "</i>");
          }
       }
+      return;
    }
-   else
+
+   // 3. Kondisi Unhedged Sungguhan: Master > Slave dan Slave tidak blocked
+   m_blocked_alert_sent = false;
+   if(s_unhedged_start_tick == 0)
    {
+      s_unhedged_start_tick = GetTickCount64();
+   }
+   else if(GetTickCount64() - s_unhedged_start_tick > (ulong)(InpUnhedgedWatchdogSec * 1000))
+   {
+      Print("🚨 [UNHEDGED WATCHDOG TRIGGERED] Master memiliki ", master_count, " posisi tapi Slave hanya meng-hedge ",
+            m_slave_pos_count, " posisi selama > ", InpUnhedgedWatchdogSec, " detik! Menutup posisi unhedged demi keselamatan modal!");
+      m_closing_active = true;
+      m_closing_lock_until = TimeCurrent() + 6;
+      CloseAllMasterPositions();
+      m_closing_active = false;
+      m_last_order_time = TimeCurrent();
       s_unhedged_start_tick = 0;
+
+      if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
+      {
+         SendTelegramMessage("🚨 <b>[UNHEDGED WATCHDOG TRIGGERED]</b>\n" +
+                             "────────────────────────────\n" +
+                             "⚠️ Ditemukan posisi Master yang tidak di-hedge oleh Slave selama > " + IntegerToString(InpUnhedgedWatchdogSec) + " detik.\n" +
+                             "🛡️ <b>Posisi Master ditutup otomatis demi keselamatan modal!</b>\n" +
+                             "⏰ <i>" + TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS) + "</i>");
+      }
    }
 }
 
 //+------------------------------------------------------------------+
-//| SPREAD-LOCK GUARD: Memeriksa apakah spread dalam batas aman       |
+//| DUAL SPREAD-LOCK GUARD (v1.26): Memeriksa spread Master & Slave  |
 //| Mencegah eksekusi close TP dan entry baru saat spread mekar liar  |
 //+------------------------------------------------------------------+
 bool IsSpreadAcceptable()
 {
    if(InpMaxSpreadPoints <= 0) return true;
-   long cur_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
-   if(cur_spread > (long)InpMaxSpreadPoints)
+   long master_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
+   long slave_spread  = (m_slave_online && m_slave_spread > 0) ? m_slave_spread : 0;
+   long worst_spread  = MathMax(master_spread, slave_spread);
+
+   if(worst_spread > (long)InpMaxSpreadPoints)
    {
       static datetime s_last_spread_log = 0;
       if(TimeCurrent() - s_last_spread_log >= 5)
       {
-         Print("🛡️ [SPREAD-LOCK ACTIVE] Spread ", m_symbol, " = ", cur_spread,
-               " poin > batas ", (long)InpMaxSpreadPoints, " poin ($", DoubleToString(InpMaxSpreadPoints * m_point, 2),
+         Print("🛡️ [DUAL SPREAD-LOCK ACTIVE] Master Spread: ", master_spread,
+               " pts | Slave Spread: ", slave_spread,
+               " pts > batas ", (long)InpMaxSpreadPoints, " pts ($", DoubleToString(InpMaxSpreadPoints * m_point, 2),
                "). Menahan eksekusi untuk mencegah slippage!");
          s_last_spread_log = TimeCurrent();
       }
@@ -771,6 +832,15 @@ void ManageGrid()
       return;
    }
 
+   // FOMC / EXECUTION SHIELD (v1.25):
+   // Slave melapor TIDAK BISA EKSEKUSI order (Algo Trading OFF / circuit breaker Slave).
+   // Tahan SEMUA aktivitas grid: jangan buka layer baru, dan JANGAN tutup TP sepihak
+   // (posisi Slave sedang mengunci Master - menutup sepihak = naked exposure).
+   if(m_slave_trade_blocked)
+   {
+      return;
+   }
+
    // WEEKEND / MARKET CLOSED LOCK:
    MqlDateTime dt_loc;
    TimeToStruct(TimeLocal(), dt_loc);
@@ -780,12 +850,20 @@ void ManageGrid()
 
    if(total_positions > 0 && m_slave_pos_count > 0 && effective_basket_tp > 0 && combined_net_profit >= effective_basket_tp)
    {
-      // SPREAD-LOCK PROTECTION:
-      // Tahan eksekusi TP jika spread sedang mekar (misal saat CPI spike 200-500 poin).
-      // Tunggu spread kembali normal (<= InpMaxSpreadPoints) agar profit bersih tidak tergerus spread liar!
+      // 1. DUAL SPREAD-LOCK PROTECTION:
+      // Tahan eksekusi TP jika spread Master ATAU Slave sedang mekar (misal saat FOMC/CPI spike 200-500 poin).
+      // Tunggu spread kembali normal di kedua broker (<= InpMaxSpreadPoints) agar profit bersih tidak tergerus spread liar!
       if(!IsSpreadAcceptable())
       {
-         return; // Tunda close basket sampai spread aman
+         return; // Tunda close basket sampai spread kedua broker aman
+      }
+
+      // 2. SPIKE VELOCITY GUARD ON TAKE PROFIT (v1.26):
+      // Tahan eksekusi TP di detik lilin M1 meledak liar (anti-slippage Ask saat spike berita besar).
+      // Posisi sepenuhnya ter-hedging (1:1), menahan sesaat sampai lilin tenang terbukti aman dan mencegah kerugian slippage.
+      if(CheckSpikeVelocity())
+      {
+         return; // Tunda close basket sampai lonjakan lilin M1 reda
       }
 
       Print("🎉 [COMBINED NET TP TRIGGERED] Total Gabungan (Master: $", DoubleToString(total_profit, 2),
@@ -878,6 +956,7 @@ void ManageGrid()
    {
       m_last_order_time = TimeCurrent(); // Update cooldown immediately to prevent rapid-fire loops
       m_last_order_open_time = TimeCurrent();
+      m_cycle_start_time = TimeCurrent(); // v1.27: Waktu awal siklus HANYA dicatat saat Layer 1 dibuka!
       string comment = m_comment_prefix + "1";
       if(m_trade.Sell(effective_lot, m_symbol, tick.bid, 0, 0, comment))
       {
@@ -900,11 +979,18 @@ void ManageGrid()
          return; // Hold off, tunggu Slave selesai hedge
       }
 
-      // SAFETY CHECK 2: Jangan buka Layer baru jika profit gabungan saat ini sudah positif tebal (>= 60% dari Target TP),
-      // agar tidak membuka posisi baru di pucuk/lembah sesaat sebelum Take Profit tercapai!
-      if(effective_basket_tp > 0 && combined_net_profit >= (effective_basket_tp * 0.60))
+      // SAFETY CHECK 2 (NEAR-TP EXIT SHIELD v1.27):
+      // Jangan buka Layer baru jika profit gabungan saat ini sudah mendekati Target TP!
+      // Ambang batas: >= 70% dari Target TP ATAU sisa jarak profit <= $15.00
+      if(effective_basket_tp > 0)
       {
-         return; // Keranjang sudah dekat target TP, biarkan posisi yang ada menyelesaikan TP!
+         if(combined_net_profit >= (effective_basket_tp * 0.70) || (effective_basket_tp - combined_net_profit) <= 15.0)
+         {
+            Print("🛡️ [NEAR-TP SHIELD] Profit gabungan ($", DoubleToString(combined_net_profit, 2),
+                  ") sudah mendekati target TP ($", DoubleToString(effective_basket_tp, 2),
+                  "). Menahan penambahan layer baru agar keranjang menyelesaikan TP!");
+            return;
+         }
       }
 
       double step_distance = InpGridStepPoints * m_point;
@@ -916,14 +1002,15 @@ void ManageGrid()
          // 1. Buka Layer saat harga NAIK -> Panen TP Gabungan (+0.01 lot delta asimetris)
          if((tick.bid - max_price) >= step_distance) should_open = true;
 
-         // 2. Buka Layer saat harga TURUN -> HANYA JIKA MARGIN SLAVE MASIH SEHAT!
-         // Jika Slave sudah mendekati MC, DILARANG MENAMBAH LAYER KE BAWAH agar delta lot tidak menumpuk!
+         // 2. Buka Layer saat harga TURUN -> HANYA JIKA SLAVE AMAN DARI LIQUIDASI! (v1.27)
+         // DILARANG membuka layer ke bawah jika Slave sekarat (Equity < $150 atau Margin Level < InpMinMarginLevel)
          if((min_price - tick.bid) >= step_distance)
          {
-            if(m_slave_online && ((m_slave_margin_level > 0 && m_slave_margin_level < InpMinMarginLevel) || m_slave_free_margin < 200.0))
+            if(m_slave_online && (m_slave_equity < 150.0 || (m_slave_margin_level > 0 && m_slave_margin_level < InpMinMarginLevel) || m_slave_free_margin < 250.0))
             {
-               Print("⚠️ [DOWNWARD GRID SHIELD] Slave margin tertekan (ML: ", DoubleToString(m_slave_margin_level, 1),
-                     "%, Free: $", DoubleToString(m_slave_free_margin, 2), ")! Menahan penambahan layer bawah.");
+               Print("⚠️ [DOWNWARD GRID SHIELD] Slave mendekati likuidasi/MC (Equity: $", DoubleToString(m_slave_equity, 2),
+                     ", ML: ", DoubleToString(m_slave_margin_level, 1),
+                     "%, Free: $", DoubleToString(m_slave_free_margin, 2), ")! Menahan layer bawah untuk panen MC bersih.");
                should_open = false;
             }
             else
@@ -966,26 +1053,28 @@ void CloseAllMasterPositions()
    if(closed_count > 0)
    {
       m_last_order_close_time = TimeCurrent();
-      int lifespan = (m_last_order_open_time > 0) ? (int)(TimeCurrent() - m_last_order_open_time) : 999;
+      int cycle_lifespan = (m_cycle_start_time > 0) ? (int)(TimeCurrent() - m_cycle_start_time) : 999;
 
-      // SHIELD: Jika posisi hidup kurang dari 20 detik (abnormal rapid close / flapping):
-      if(m_last_order_open_time > 0 && lifespan <= 20)
+      // SHIELD: Umur siklus dihitung dari waktu Layer 1 dibuka (m_cycle_start_time).
+      // Hanya jika satu siklus penuh dibuka dan ditutup <= 20 detik yang dianggap flapping abnormal:
+      if(m_cycle_start_time > 0 && cycle_lifespan <= 20)
       {
          m_rapid_close_counter++;
-         Print("⚠️ [ANTI-FLAPPING MONITOR] Terdeteksi buka-tutup kilat (Umur: ", lifespan, "s). Counter: ", m_rapid_close_counter);
+         Print("⚠️ [ANTI-FLAPPING MONITOR] Terdeteksi siklus kilat abnormal (Umur Siklus: ", cycle_lifespan, "s). Counter: ", m_rapid_close_counter);
 
          // Jika terdeteksi 2x buka-tutup kilat abnormal: KUNCI MATI SELAMA 5 MENIT!
          if(m_rapid_close_counter >= 2)
          {
             m_circuit_breaker_until = TimeCurrent() + 300; // 5 Menit Lockout
-            m_circuit_breaker_reason = "Terdeteksi 2x Buka-Tutup Kilat Abnormal (<20s)";
+            m_circuit_breaker_reason = "Terdeteksi 2x Siklus Kilat Abnormal (<20s)";
             Print("🚨 [CIRCUIT BREAKER ACTIVATED] Bot dikunci PAUSE selama 5 menit untuk melindungi modal!");
             if(InpEnableTelegram)
             {
                SendTelegramMessage("🚨 <b>[CIRCUIT BREAKER SHIELD DIAKTIFKAN]</b>\n" +
                                    "────────────────────────────\n" +
-                                   "⚠️ Terdeteksi 2x buka-tutup cepat abnormal dalam hitungan detik.\n" +
+                                   "⚠️ Terdeteksi 2x siklus buka-tutup kilat abnormal berturut-turut (&lt;20 detik).\n" +
                                    "🛑 <b>Trading DIKUNCI PAUSE selama 5 Menit</b> untuk melindungi modal Anda dari biaya spread!\n" +
+                                   "⏳ Trading akan otomatis resume pada: <b>" + TimeToString(m_circuit_breaker_until, TIME_MINUTES|TIME_SECONDS) + "</b>\n" +
                                    "⏰ <i>" + TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS) + "</i>");
             }
          }
@@ -994,6 +1083,7 @@ void CloseAllMasterPositions()
       {
          m_rapid_close_counter = 0;
       }
+      m_cycle_start_time = 0; // Reset waktu siklus setelah seluruh posisi ditutup
    }
 }
 
@@ -1167,7 +1257,7 @@ void UpdateDashboard()
    double comb_profit = total_profit + (m_slave_online ? m_slave_profit : 0.0);
 
    string slave_info = m_slave_online ?
-      ("Login: " + IntegerToString(m_slave_login) + " | Free: $" + DoubleToString(m_slave_free_margin, 2) + " (" + DoubleToString(m_slave_margin_level, 1) + "%)") :
+      ("Login: " + IntegerToString(m_slave_login) + " | Free: $" + DoubleToString(m_slave_free_margin, 2) + " (" + DoubleToString(m_slave_margin_level, 1) + "%) | Spread: " + IntegerToString(m_slave_spread) + "pts") :
       "OFFLINE / Not Connected";
 
    string status_str = "⏳ IDLE - Waiting";
@@ -1202,15 +1292,24 @@ void UpdateDashboard()
       status_str = "⚠️ PAUSED: Slave Margin Kritis (Free: $" + DoubleToString(m_slave_free_margin, 2) + ", Lvl: " + DoubleToString(m_slave_margin_level, 1) + "%) - Proteksi Margin Aktif!";
       ObjectDelete(0, "BTN_RESUME_CYCLE");
    }
+   else if(m_slave_trade_blocked)
+   {
+      status_str = "🚫 SLAVE TRADE-BLOCKED: Algo Slave OFF / CB aktif - Grid DITAHAN (proteksi FOMC)";
+      ObjectDelete(0, "BTN_RESUME_CYCLE");
+   }
    else
    {
       ObjectDelete(0, "BTN_RESUME_CYCLE");
    }
 
    long cur_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
-   string shield_info = "NORMAL (" + IntegerToString(cur_spread) + "pts)";
-   if(cur_spread > (long)InpMaxSpreadPoints)
-      shield_info = "🛡️ SPREAD-LOCK (" + IntegerToString(cur_spread) + " > " + IntegerToString((long)InpMaxSpreadPoints) + "pts)";
+   long slave_sp   = (m_slave_online && m_slave_spread > 0) ? m_slave_spread : 0;
+   long worst_sp   = MathMax(cur_spread, slave_sp);
+   string sp_details = "(M:" + IntegerToString(cur_spread) + " | S:" + IntegerToString(slave_sp) + "pts)";
+
+   string shield_info = "NORMAL " + sp_details;
+   if(worst_sp > (long)InpMaxSpreadPoints)
+      shield_info = "🛡️ SPREAD-LOCK " + sp_details + " > " + IntegerToString((long)InpMaxSpreadPoints) + "pts";
    else if(TimeCurrent() < m_spike_cooldown_until)
       shield_info = "🚨 SPIKE COOLDOWN (" + IntegerToString((int)(m_spike_cooldown_until - TimeCurrent())) + "s)";
    else if(IsHighImpactNewsNearby())
@@ -1218,7 +1317,7 @@ void UpdateDashboard()
 
    string text = "\n" +
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
-      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.24             ║\n" +
+      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.27             ║\n" +
       "  ╠════════════════════════════════════════════════════════════════╣\n" +
       "    Pair Group ID   : #" + IntegerToString(InpPairID) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
       "    Bridge Files    : " + m_master_file + " <-> " + m_slave_file + "\n" +
@@ -1413,7 +1512,8 @@ void SendWebTelemetry()
          total_profit += p_prof;
 
          // Find matching slave position
-         string expected_comment = "CT#" + IntegerToString(ticket);
+         string slave_prefix = (InpPairID <= 1) ? "CT#" : ("CT" + IntegerToString(InpPairID) + "#");
+         string expected_comment = slave_prefix + IntegerToString(ticket);
          int s_idx = -1;
          for(int s = 0; s < m_slave_pos_count; s++)
          {

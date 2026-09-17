@@ -39,14 +39,14 @@ class DualMT5SimulationTest(unittest.TestCase):
             return None
         with open(self.master_file, 'rb') as f:
             data = f.read()
-        if len(data) < 72:
+        if len(data) < 76:
             return None
-        magic, ver, counter, login, equity, balance, free_margin, margin_lvl, total_prof, count = struct.unpack('<qqqqdddddi', data[:72])
-        offset = 72
+        magic, ver, counter, login, equity, balance, free_margin, margin_lvl, total_prof, count = struct.unpack('<qqqqdddddi', data[:76])
+        offset = 76
         positions = []
         for _ in range(count):
-            ticket, p_type, vol, price, prof, clen = struct.unpack('<qidddi', data[offset:offset+44])
-            offset += 44
+            ticket, p_type, vol, price, prof, clen = struct.unpack('<qidddi', data[offset:offset+40])
+            offset += 40
             comment = data[offset:offset+clen].decode('utf-8') if clen > 0 else ''
             offset += clen
             positions.append({'ticket': ticket, 'type': p_type, 'volume': vol, 'price': price, 'profit': prof, 'comment': comment})
@@ -69,8 +69,7 @@ class DualMT5SimulationTest(unittest.TestCase):
         return data[4:4+clen].decode('utf-8') if clen > 0 else ''
 
     def test_debounce_liquidation_harvest(self):
-        print('
---- TEST 1: Liquidation Harvest Debounce & Equity <= 0 ---')
+        print('\n--- TEST 1: Liquidation Harvest Debounce & Equity <= 0 ---')
         class MasterLiquidationChecker:
             def __init__(self):
                 self.slave_mc_counter = 0
@@ -114,8 +113,7 @@ class DualMT5SimulationTest(unittest.TestCase):
         print('  [PASS] 1-Tick glitch rejected, 3-Cycle genuine MC (/bin/zsh/negative equity) successfully harvested!')
 
     def test_counter_ordering_and_zero_latency_broadcast(self):
-        print('
---- TEST 2: Counter Ordering & Zero-Latency Post-Trade Broadcast ---')
+        print('\n--- TEST 2: Counter Ordering & Zero-Latency Post-Trade Broadcast ---')
         counter = 1
         pos_master = [{'ticket': 1001, 'type': 1, 'volume': 0.10, 'price': 2650.00, 'profit': 0.0, 'comment': 'GRID_S1'}]
         self.write_master_state(counter, 100870, 1000.0, 1000.0, 950.0, 500.0, 0.0, pos_master)
@@ -156,8 +154,7 @@ class DualMT5SimulationTest(unittest.TestCase):
         print('  [PASS] Zero-latency post-trade broadcast verified: Layer 2 hedged instantly without delay!')
 
     def test_close_all_race_single_commander(self):
-        print('
---- TEST 3: CLOSE_ALL Single Commander & Anti-Collision ---')
+        print('\n--- TEST 3: CLOSE_ALL Single Commander & Anti-Collision ---')
         master_positions = [{'ticket': 1001, 'type': 1, 'volume': 0.10, 'price': 2650.00, 'profit': -20.0, 'comment': 'GRID_S1'}]
         slave_positions  = [{'ticket': 2001, 'type': 0, 'volume': 0.11, 'price': 2650.15, 'profit': 60.0, 'comment': 'CT#1001'}]
 
@@ -184,8 +181,7 @@ class DualMT5SimulationTest(unittest.TestCase):
         print('  [PASS] Single Commander TP execution verified: Clean close, command consumed, zero race collisions!')
 
     def test_sync_close_anti_jitter_3_cycle_confirmation(self):
-        print('
---- TEST 4: Anti-Jitter SyncClose 3-Cycle Confirmation ---')
+        print('\n--- TEST 4: Anti-Jitter SyncClose 3-Cycle Confirmation ---')
         missing_tracker = {}
         slave_pos = [{'ticket': 2001, 'comment': 'CT#1001'}]
 
