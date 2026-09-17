@@ -53,6 +53,9 @@ bool           m_trade_blocked      = false;  // Slave tidak bisa eksekusi order
 bool           m_pending_close_all  = false;  // Slave Self-Defense: Tahan CLOSE_ALL jika spread sedang mekar liar
 ulong          m_pending_close_start_tick = 0;// Waktu mulai penundaan CLOSE_ALL
 
+//--- Smart Auto-Migration Effective Variables (v1.27)
+double         m_lot_multiplier     = 1.10;
+
 // Anti-Flapping & Circuit Breaker Tracking
 datetime       m_cycle_start_time       = 0;  // v1.27: Waktu awal siklus Slave (hanya dicatat saat hedge pertama)
 datetime       m_last_order_open_time   = 0;
@@ -201,8 +204,13 @@ int OnInit()
    m_circuit_breaker_until = 0;
    ArrayResize(m_missing_tickets, 0);
 
-   Print("🟢 [BonusHedge_Slave v1.25] Initialized on ", m_symbol,
-         " (Pair ID: #", InpPairID, ", Magic: ", m_magic, ", Mult: ", DoubleToString(InpLotMultiplier, 2), "x)");
+   // SMART AUTO-MIGRATION (v1.27):
+   // Jika chart MT5 masih menyimpan preset lama (1.00x), bot otomatis meng-upgrade ke 1.10x
+   // tanpa perlu user me-load ulang preset file!
+   m_lot_multiplier = (InpLotMultiplier < 1.10) ? 1.10 : InpLotMultiplier;
+
+   Print("🟢 [BonusHedge_Slave v1.27] Initialized on ", m_symbol,
+         " (Pair ID: #", InpPairID, ", Magic: ", m_magic, ", Mult: ", DoubleToString(m_lot_multiplier, 2), "x)");
 
    // Set Chart Foreground Text to Bright Yellow for maximum crisp readability
    ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);
@@ -642,7 +650,7 @@ void SyncOpenPositions()
       }
 
       bool already_hedged = false;
-      double want_raw     = m_master_positions[m_idx].volume * InpLotMultiplier;
+      double want_raw     = m_master_positions[m_idx].volume * m_lot_multiplier;
       double want_lot     = MathRound(want_raw * 100.0) / 100.0;
       want_lot            = MathMax(0.01, MathMin(50.0, want_lot));
 
@@ -654,12 +662,12 @@ void SyncOpenPositions()
             ulong s_ticket = PositionGetTicket(s);
             if(IsSlaveHedgePosition(s_ticket))
             {
-                string cmt = PositionGetString(POSITION_COMMENT);
-                if(cmt == expected_comment || StringFind(cmt, expected_comment) >= 0)
-                {
-                   already_hedged = true;
-                   break;
-                }
+                 string cmt = PositionGetString(POSITION_COMMENT);
+                 if(cmt == expected_comment || StringFind(cmt, expected_comment) >= 0)
+                 {
+                    already_hedged = true;
+                    break;
+                 }
             }
          }
       }
@@ -673,7 +681,7 @@ void SyncOpenPositions()
          int have_count = 0, need_count = 0;
          for(int mm = 0; mm < m_master_pos_count; mm++)
          {
-            double wlot = MathRound(m_master_positions[mm].volume * InpLotMultiplier * 100.0) / 100.0;
+            double wlot = MathRound(m_master_positions[mm].volume * m_lot_multiplier * 100.0) / 100.0;
             wlot = MathMax(0.01, MathMin(50.0, wlot));
             if(MathAbs(wlot - want_lot) < 0.005 && (int)m_master_positions[mm].type == (int)m_master_positions[m_idx].type)
                need_count++;
@@ -1069,7 +1077,7 @@ void UpdateDashboard(double slave_profit, double combined_net_profit)
       "      Credit (Bonus)  : $" + DoubleToString(AccountInfoDouble(ACCOUNT_CREDIT), 2) + "\n" +
       "      Free Margin     : $" + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_FREE), 2) + " (" + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_LEVEL), 1) + "%)\n" +
       "      Floating        : $" + DoubleToString(slave_profit, 2) + "\n" +
-      "      Hedges          : " + IntegerToString(slave_pos_count) + " Pairs (x" + DoubleToString(InpLotMultiplier, 2) + " Lot)\n" +
+      "      Hedges          : " + IntegerToString(slave_pos_count) + " Pairs (x" + DoubleToString(m_lot_multiplier, 2) + " Lot)\n" +
       "  ────────────────────────────────────────────────────────────────\n" +
       "    🎯 NET COMBINED PROFIT : " + profit_sign + DoubleToString(combined_net_profit, 2) + "\n" +
       "    Status : " + status_str + "\n" +

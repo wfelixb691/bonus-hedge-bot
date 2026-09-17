@@ -79,6 +79,11 @@ int            m_digits             = 2;
 bool           m_closing_active     = false;
 bool           m_cycle_paused       = false;
 
+//--- Smart Auto-Migration Effective Variables (v1.27)
+double         m_spread_buffer          = 35.0;
+double         m_min_margin_level       = 100.0;
+int            m_unhedged_watchdog      = 15;
+
 
 // Slave Telemetry Snapshot
 struct SlavePosInfo
@@ -192,7 +197,17 @@ int OnInit()
    m_last_order_close_time = 0;
    m_rapid_close_counter   = 0;
    m_circuit_breaker_until = 0;
-   Print("🟢 [BonusHedge_Master v1.25] Initialized on ", m_symbol, " (Pair ID: ", InpPairID, ", Magic: ", m_magic, ")");
+
+   // SMART AUTO-MIGRATION (v1.27):
+   // Jika chart MT5 masih menyimpan preset lama (buffer $20, ML 150%, atau watchdog 7s),
+   // bot otomatis meng-upgrade ke settingan optimal v1.27 tanpa perlu user me-load ulang preset file!
+   m_spread_buffer     = (InpSpreadBufferUSD < 35.0) ? 35.0 : InpSpreadBufferUSD;
+   m_min_margin_level  = (InpMinMarginLevel > 100.0) ? 100.0 : InpMinMarginLevel;
+   m_unhedged_watchdog = (InpUnhedgedWatchdogSec > 0 && InpUnhedgedWatchdogSec < 15) ? 15 : InpUnhedgedWatchdogSec;
+
+   Print("🟢 [BonusHedge_Master v1.27] Initialized on ", m_symbol, " (Pair ID: ", InpPairID, ", Magic: ", m_magic,
+         ", Buffer: $", DoubleToString(m_spread_buffer, 2), ", MinML: ", DoubleToString(m_min_margin_level, 1),
+         "%, Watchdog: ", m_unhedged_watchdog, "s)");
 
    // Set Chart Foreground Text to Bright Yellow for maximum crisp readability
    ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);
@@ -594,7 +609,7 @@ bool CheckSlaveLiquidationHarvest()
 //+------------------------------------------------------------------+
 void CheckUnhedgedOrphanWatchdog()
 {
-   if(InpUnhedgedWatchdogSec <= 0) return;
+   if(m_unhedged_watchdog <= 0) return;
    if(!m_slave_online || m_closing_active || m_cycle_paused) return;
 
    int master_count = 0;
@@ -649,10 +664,10 @@ void CheckUnhedgedOrphanWatchdog()
    {
       s_unhedged_start_tick = GetTickCount64();
    }
-   else if(GetTickCount64() - s_unhedged_start_tick > (ulong)(InpUnhedgedWatchdogSec * 1000))
+   else if(GetTickCount64() - s_unhedged_start_tick > (ulong)(m_unhedged_watchdog * 1000))
    {
       Print("🚨 [UNHEDGED WATCHDOG TRIGGERED] Master memiliki ", master_count, " posisi tapi Slave hanya meng-hedge ",
-            m_slave_pos_count, " posisi selama > ", InpUnhedgedWatchdogSec, " detik! Menutup posisi unhedged demi keselamatan modal!");
+            m_slave_pos_count, " posisi selama > ", m_unhedged_watchdog, " detik! Menutup posisi unhedged demi keselamatan modal!");
       m_closing_active = true;
       m_closing_lock_until = TimeCurrent() + 6;
       CloseAllMasterPositions();
@@ -664,7 +679,7 @@ void CheckUnhedgedOrphanWatchdog()
       {
          SendTelegramMessage("🚨 <b>[UNHEDGED WATCHDOG TRIGGERED]</b>\n" +
                              "────────────────────────────\n" +
-                             "⚠️ Ditemukan posisi Master yang tidak di-hedge oleh Slave selama > " + IntegerToString(InpUnhedgedWatchdogSec) + " detik.\n" +
+                             "⚠️ Ditemukan posisi Master yang tidak di-hedge oleh Slave selama > " + IntegerToString(m_unhedged_watchdog) + " detik.\n" +
                              "🛡️ <b>Posisi Master ditutup otomatis demi keselamatan modal!</b>\n" +
                              "⏰ <i>" + TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS) + "</i>");
       }
@@ -821,7 +836,7 @@ void ManageGrid()
          base_tp_amount = InpBasketTPDollars; // Use custom if user explicitly typed a custom amount
    }
 
-   double effective_basket_tp = (base_tp_amount > 0) ? (base_tp_amount + InpSpreadBufferUSD) : 0.0;
+   double effective_basket_tp = (base_tp_amount > 0) ? (base_tp_amount + m_spread_buffer) : 0.0;
 
    // --- CHECK COMBINED NET PROFIT (MASTER + SLAVE GABUNGAN PLUS) ---
    // Wajib gabungan Master + Slave terkonfirmasi ONLINE agar 100% meng-cover semua spread dan komisi!
@@ -869,7 +884,7 @@ void ManageGrid()
       Print("🎉 [COMBINED NET TP TRIGGERED] Total Gabungan (Master: $", DoubleToString(total_profit, 2),
             " + Slave: $", DoubleToString(m_slave_profit, 2), ") = $", DoubleToString(combined_net_profit, 2),
             " >= Target $", DoubleToString(effective_basket_tp, 2), " (Base $", DoubleToString(base_tp_amount, 2),
-            " + Flat Buffer $", DoubleToString(InpSpreadBufferUSD, 2), " Ter-Cover!)");
+            " + Flat Buffer $", DoubleToString(m_spread_buffer, 2), " Ter-Cover!)");
       m_closing_active = true;
       m_closing_lock_until = TimeCurrent() + 6; // 6-second closing lock
       
@@ -914,7 +929,7 @@ void ManageGrid()
    double my_margin_level = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
 
    // 1. Do not open if Master's own margin is critical
-   if(my_free_margin < InpMinFreeMargin || (my_margin_level > 0 && my_margin_level < InpMinMarginLevel))
+   if(my_free_margin < InpMinFreeMargin || (my_margin_level > 0 && my_margin_level < m_min_margin_level))
    {
       return; // Hold off, margin critical
    }
@@ -922,7 +937,7 @@ void ManageGrid()
    // 2. Do not open if Slave's margin is critical or Slave cannot afford new hedge (Checks Layer 1 & Grid!)
    if(m_slave_online)
    {
-      if(m_slave_balance <= 0.0 || m_slave_equity < 100.0 || m_slave_free_margin < InpMinFreeMargin || (m_slave_margin_level > 0 && m_slave_margin_level < InpMinMarginLevel))
+      if(m_slave_balance <= 0.0 || m_slave_equity < 100.0 || m_slave_free_margin < InpMinFreeMargin || (m_slave_margin_level > 0 && m_slave_margin_level < m_min_margin_level))
       {
          // Slave kehabisan saldo/balance minus (butuh Rebalance/Deposit dari Master): JANGAN BUKA ORDER APAPUN!
          return;
@@ -1006,7 +1021,7 @@ void ManageGrid()
          // DILARANG membuka layer ke bawah jika Slave sekarat (Equity < $150 atau Margin Level < InpMinMarginLevel)
          if((min_price - tick.bid) >= step_distance)
          {
-            if(m_slave_online && (m_slave_equity < 150.0 || (m_slave_margin_level > 0 && m_slave_margin_level < InpMinMarginLevel) || m_slave_free_margin < 250.0))
+            if(m_slave_online && (m_slave_equity < 150.0 || (m_slave_margin_level > 0 && m_slave_margin_level < m_min_margin_level) || m_slave_free_margin < 250.0))
             {
                Print("⚠️ [DOWNWARD GRID SHIELD] Slave mendekati likuidasi/MC (Equity: $", DoubleToString(m_slave_equity, 2),
                      ", ML: ", DoubleToString(m_slave_margin_level, 1),
@@ -1253,7 +1268,7 @@ void UpdateDashboard()
    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
    double base_tp = (InpBasketTPDollars == 31.74) ? ((InpInitialLot / 0.10) * 31.74) : InpBasketTPDollars;
    if(InpAutoScaleLot) base_tp = (balance / 1000.0) * InpBasketTPDollars;
-   double eff_target_tp = (base_tp > 0) ? (base_tp + InpSpreadBufferUSD) : 0.0;
+   double eff_target_tp = (base_tp > 0) ? (base_tp + m_spread_buffer) : 0.0;
    double comb_profit = total_profit + (m_slave_online ? m_slave_profit : 0.0);
 
    string slave_info = m_slave_online ?
@@ -1277,7 +1292,7 @@ void UpdateDashboard()
       status_str = "✅ GRID ACTIVE (SYNC 50ms) - Floating: " + (comb_profit >= 0 ? "+$" : "-$") + DoubleToString(MathAbs(comb_profit), 2);
       ObjectDelete(0, "BTN_RESUME_CYCLE");
    }
-   else if(AccountInfoDouble(ACCOUNT_MARGIN_FREE) < InpMinFreeMargin || (AccountInfoDouble(ACCOUNT_MARGIN_LEVEL) > 0 && AccountInfoDouble(ACCOUNT_MARGIN_LEVEL) < InpMinMarginLevel))
+   else if(AccountInfoDouble(ACCOUNT_MARGIN_FREE) < InpMinFreeMargin || (AccountInfoDouble(ACCOUNT_MARGIN_LEVEL) > 0 && AccountInfoDouble(ACCOUNT_MARGIN_LEVEL) < m_min_margin_level))
    {
       status_str = "⚠️ PAUSED: Master Margin Rendah ($" + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_FREE), 2) + ") - Harap Rebalance!";
       ObjectDelete(0, "BTN_RESUME_CYCLE");
@@ -1287,7 +1302,7 @@ void UpdateDashboard()
       status_str = "⚠️ PAUSED: Slave Saldo Habis/Nol ($" + DoubleToString(m_slave_balance, 2) + ") - Harap Reset/Deposit!";
       ObjectDelete(0, "BTN_RESUME_CYCLE");
    }
-   else if(m_slave_online && (m_slave_free_margin < InpMinFreeMargin || (m_slave_margin_level > 0 && m_slave_margin_level < InpMinMarginLevel)))
+   else if(m_slave_online && (m_slave_free_margin < InpMinFreeMargin || (m_slave_margin_level > 0 && m_slave_margin_level < m_min_margin_level)))
    {
       status_str = "⚠️ PAUSED: Slave Margin Kritis (Free: $" + DoubleToString(m_slave_free_margin, 2) + ", Lvl: " + DoubleToString(m_slave_margin_level, 1) + "%) - Proteksi Margin Aktif!";
       ObjectDelete(0, "BTN_RESUME_CYCLE");
@@ -1328,7 +1343,7 @@ void UpdateDashboard()
       "    Active Layers   : " + IntegerToString(total_positions) + " / " + IntegerToString(InpMaxLayers) + "\n" +
       "    Master Floating : $" + DoubleToString(total_profit, 2) + "\n" +
       "    Net Combined P/L: $" + (comb_profit >= 0 ? "+" : "") + DoubleToString(comb_profit, 2) + "\n" +
-      "    Target Basket TP: $" + DoubleToString(eff_target_tp, 2) + " (Base $" + DoubleToString(base_tp, 2) + " + Flat Buffer $" + DoubleToString(InpSpreadBufferUSD, 2) + ")\n" +
+      "    Target Basket TP: $" + DoubleToString(eff_target_tp, 2) + " (Base $" + DoubleToString(base_tp, 2) + " + Flat Buffer $" + DoubleToString(m_spread_buffer, 2) + ")\n" +
       "    News/Spread     : " + shield_info + "\n" +
       "  ────────────────────────────────────────────────────────────────\n" +
       "    🔗 SLAVE TELEMETRY: " + slave_info + "\n" +
@@ -1549,7 +1564,7 @@ void SendWebTelemetry()
    double net_fl  = total_profit + (m_slave_online ? m_slave_profit : 0.0);
    double base_tp_calc = (InpBasketTPDollars == 31.74) ? ((InpInitialLot / 0.10) * 31.74) : InpBasketTPDollars;
    if(InpAutoScaleLot) base_tp_calc = (balance / 1000.0) * InpBasketTPDollars;
-   double eff_telemetry_tp = (base_tp_calc > 0) ? (base_tp_calc + InpSpreadBufferUSD) : 0.0;
+   double eff_telemetry_tp = (base_tp_calc > 0) ? (base_tp_calc + m_spread_buffer) : 0.0;
 
    long cur_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
    string shield_status = "NORMAL";
