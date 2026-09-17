@@ -98,18 +98,9 @@ echo.
 
 :: 4. FLUSH MEMORY & RESTART TERMINAL (AGAR KODE BARU LANGSUNG AKTIF DI RAM)
 echo [5/5] FLUSH MEMORI MT5:
-echo Agar memori terminal bersih dari state/timer lama, terminal MT5 perlu di-restart sekejap.
-set /p RESTART_MT5="Restart semua terminal MT5 sekarang secara otomatis? (Y/N) [Default: Y]: "
-if "%RESTART_MT5%"=="" set RESTART_MT5=Y
-if /i "%RESTART_MT5%"=="Y" (
-    echo.
-    echo [*] Mendata path terminal yang sedang berjalan dan me-restart...
-    powershell -NoProfile -Command "$paths = Get-Process terminal64 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path -Unique; if($paths) { Stop-Process -Name terminal64 -Force; Start-Sleep -Seconds 3; foreach($p in $paths) { Start-Process $p }; Write-Host '>>> [BERHASIL] Semua terminal MT5 telah direstart dan memuat EA versi 1.27 ke RAM!' -ForegroundColor Green } else { Write-Host '[INFO] Tidak ada terminal64.exe yang sedang berjalan.' -ForegroundColor Yellow }"
-) else (
-    echo.
-    echo [!] Anda memilih TIDAK me-restart MT5 otomatis.
-    echo     Silakan restart MT5 atau ganti timeframe di chart agar EA reload ke RAM.
-)
+echo Me-restart semua terminal MT5 secara otomatis agar memori RAM 100%% bersih...
+echo [*] Mendata path terminal yang sedang berjalan dan me-restart...
+powershell -NoProfile -Command "$paths = Get-Process terminal64 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path -Unique; if($paths) { Stop-Process -Name terminal64 -Force; Start-Sleep -Seconds 3; foreach($p in $paths) { Start-Process $p }; Write-Host '>>> [BERHASIL] Semua terminal MT5 telah direstart dan memuat EA versi 1.27 ke RAM!' -ForegroundColor Green } else { Write-Host '[INFO] Tidak ada terminal64.exe yang sedang berjalan.' -ForegroundColor Yellow }"
 
 echo.
 echo ================================================================
