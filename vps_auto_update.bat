@@ -20,16 +20,26 @@ if %errorlevel% equ 0 (
 )
 echo.
 
-:: 2. Cari metaeditor64.exe untuk Auto-Compile ke .ex5
+:: 2. Cari metaeditor64.exe secara dinamis dari proses terminal MT5 yang sedang aktif
 echo [2/5] Mendeteksi MetaEditor untuk kompilasi otomatis...
 set "COMPILER="
-if exist "C:\Program Files\Prime Codex MetaTrader 5\metaeditor64.exe" set "COMPILER=C:\Program Files\Prime Codex MetaTrader 5\metaeditor64.exe"
-if exist "C:\Program Files\Prime Codex MetaTrader 5 TB 1\metaeditor64.exe" set "COMPILER=C:\Program Files\Prime Codex MetaTrader 5 TB 1\metaeditor64.exe"
-if exist "C:\Program Files\Prime Codex MetaTrader 5 TB 2\metaeditor64.exe" set "COMPILER=C:\Program Files\Prime Codex MetaTrader 5 TB 2\metaeditor64.exe"
-if exist "C:\Program Files\Prime Codex MetaTrader 5 Felix-1 Terminal\metaeditor64.exe" set "COMPILER=C:\Program Files\Prime Codex MetaTrader 5 Felix-1 Terminal\metaeditor64.exe"
-if exist "C:\Program Files\Prime Codex MetaTrader 5 Felix-2 Terminal\metaeditor64.exe" set "COMPILER=C:\Program Files\Prime Codex MetaTrader 5 Felix-2 Terminal\metaeditor64.exe"
-if exist "C:\Program Files\MetaTrader 5\metaeditor64.exe" set "COMPILER=C:\Program Files\MetaTrader 5\metaeditor64.exe"
 
+:: A. Cek dari proses terminal64.exe yang sedang berjalan (100% Akurat)
+for /f "usebackq delims=" %%E in (`powershell -NoProfile -Command "$p = Get-Process terminal64 -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path; if($p) { $d = Split-Path $p; $ed = Join-Path $d 'metaeditor64.exe'; if(Test-Path $ed) { $ed } }"`) do (
+    if exist "%%E" set "COMPILER=%%E"
+)
+
+:: B. Fallback lokasi standar jika terminal belum menyala
+if "%COMPILER%"=="" (
+    if exist "C:\Program Files\Prime Codex MetaTrader 5\metaeditor64.exe" set "COMPILER=C:\Program Files\Prime Codex MetaTrader 5\metaeditor64.exe"
+    if exist "C:\Program Files\Prime Codex MetaTrader 5 TB 1\metaeditor64.exe" set "COMPILER=C:\Program Files\Prime Codex MetaTrader 5 TB 1\metaeditor64.exe"
+    if exist "C:\Program Files\Prime Codex MetaTrader 5 TB 2\metaeditor64.exe" set "COMPILER=C:\Program Files\Prime Codex MetaTrader 5 TB 2\metaeditor64.exe"
+    if exist "C:\Program Files\Prime Codex MetaTrader 5 Felix-1 Terminal\metaeditor64.exe" set "COMPILER=C:\Program Files\Prime Codex MetaTrader 5 Felix-1 Terminal\metaeditor64.exe"
+    if exist "C:\Program Files\Prime Codex MetaTrader 5 Felix-2 Terminal\metaeditor64.exe" set "COMPILER=C:\Program Files\Prime Codex MetaTrader 5 Felix-2 Terminal\metaeditor64.exe"
+    if exist "C:\Program Files\MetaTrader 5\metaeditor64.exe" set "COMPILER=C:\Program Files\MetaTrader 5\metaeditor64.exe"
+)
+
+:: C. Scan seluruh drive C jika masih belum ketemu
 if "%COMPILER%"=="" (
     for /r "C:\Program Files" %%F in (metaeditor64.exe) do (
         if exist "%%F" (
@@ -46,8 +56,10 @@ if not "%COMPILER%"=="" (
     "%COMPILER%" /compile:"%~dp0BonusHedge_Master.mq5" /log:"%~dp0compile_master.log"
     echo [*] Meng-compile BonusHedge_Slave.mq5...
     "%COMPILER%" /compile:"%~dp0BonusHedge_Slave.mq5" /log:"%~dp0compile_slave.log"
+    type "%~dp0compile_master.log" 2>nul
+    type "%~dp0compile_slave.log" 2>nul
 ) else (
-    echo [!] MetaEditor tidak ditemukan di lokasi standar, menggunakan file .ex5 yang sudah ada.
+    echo [!] MetaEditor tidak ditemukan. Silakan tekan F4 di MT5 lalu tekan F7 untuk compile.
 )
 echo.
 
