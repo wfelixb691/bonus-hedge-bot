@@ -44,7 +44,7 @@ input double   InpBurnerBuffer      = 10.0;          // Spread Buffer ($) saat B
 input group "=== PROTEKSI DARURAT MASTER & ANTI-SALDO MINUS ==="
 input bool     InpEnableMasterShield     = true;   // Master Emergency Shield (Anti-StopOut Broker)
 input double   InpMasterMinEquityBuffer  = 0.0;    // Batas Minimal Equity Master ($) Sebelum Tutup Darurat (0 = Otomatis 25% Saldo / Min $200)
-input double   InpMasterMinMarginLevel   = 80.0;   // Batas Minimal Margin Level Master (%) (StopOut Broker: 20%)
+input double   InpMasterMinMarginLevel   = 40.0;   // Batas Minimal Margin Level Master (%) (Default: 40.0%, StopOut Broker: 20%)
 
 input group "=== PROTEKSI BERITA BESAR (PRE-NEWS AUTO FLAT) ==="
 input bool     InpNewsPreCloseOrders     = false;  // Tutup Bersih Posisi Sebelum Berita High-Impact (Default: false, anti-cutloss spread)
@@ -55,8 +55,8 @@ input bool     InpNewsPreCloseOnlyIfProfit = true; // Opsi B: Hanya Tutup Jika P
 const string   InpSymbol            = "XAUUSD";      // Trading Symbol
 const bool     InpAutoScaleLot      = false;         // Fixed Lot
 const bool     InpIncludeManualTrades = true;        // Include Manual Positions in Basket TP & Close
-const double   InpMinMarginLevel    = 100.0;         // Min Margin Level %
-const double   InpMinFreeMargin     = 150.0;         // Min Free Margin $
+const double   InpMinMarginLevel    = 50.0;          // Min Margin Level % (Dilonggarkan agar tidak mogok di 100%)
+const double   InpMinFreeMargin     = 50.0;          // Min Free Margin $ (Dilonggarkan agar tidak mogok di $150)
 const bool     InpHarvestOnSlaveMC  = true;          // Auto Close Master if Slave hits Margin Call/StopOut
 const int      InpUnhedgedWatchdogSec = 15;          // Unhedged Watchdog Timeout (Seconds)
 const double   InpMaxSpreadPoints   = 60.0;          // Max Spread Points Allowed for Open & TP
