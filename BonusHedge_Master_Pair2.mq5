@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                           BonusHedge_Master.mq5  |
+//|                                           BonusHedge_Master_Pair2.mq5  |
 //|                         All-in-One Dual-MT5 Bonus Hedging Master |
 //|                                  Copyright 2026, Advanced Bot EA |
 //+------------------------------------------------------------------+
@@ -12,8 +12,8 @@
 
 //--- User-Facing Input Parameters (Clean, Simple & Essential Only)
 input group "=== IDENTITAS PASANGAN TRADING ==="
-input int      InpPairID            = 1;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
-input string   InpClientName        = "Client #1";   // Nama Client / Investor (e.g. Pak Welly)
+input int      InpPairID            = 2;             // [KHUSUS PAIR 2] Pair Group ID (Terkunci Otomatis untuk Pasangan 2)
+input string   InpClientName        = "Pair #2";      // Identitas Pasangan (Pair #2)
 
 input group "=== AUTO LOT DARI BALANCE ==="
 input bool     InpAutoLotFromBalance = true;         // Auto-Scale Lot dari Balance ($2k->0.10, $5k->0.20, $10k->0.40)

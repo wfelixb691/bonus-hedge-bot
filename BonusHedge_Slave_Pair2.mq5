@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                            BonusHedge_Slave.mq5  |
+//|                                            BonusHedge_Slave_Pair2.mq5  |
 //|                          All-in-One Dual-MT5 Bonus Hedger Slave  |
 //|                                  Copyright 2026, Advanced Bot EA |
 //+------------------------------------------------------------------+
@@ -12,7 +12,7 @@
 
 //--- User-Facing Input Parameters (Clean, Simple & Essential Only)
 input group "=== IDENTITAS PASANGAN TRADING ==="
-input int      InpPairID            = 1;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
+input int      InpPairID            = 2;             // [KHUSUS PAIR 2] Pair Group ID (Terkunci Otomatis untuk Pasangan 2)
 
 // CATATAN: Lot Multiplier sekarang otomatis dikontrol terpusat dari Master EA!
 // Anda cukup memilih Pair Group ID di atas. Parameter di bawah hanya fallback jika Master belum online.
