@@ -1,19 +1,20 @@
 @echo off
 setlocal enabledelayedexpansion
-title DUAL-MT5 BONUS HEDGE BOT AUTO-UPDATER v1.27
+title DUAL-MT5 BONUS HEDGE BOT AUTO-UPDATER v1.34 (MULTIPLIER 1.10)
 cd /d "%~dp0"
 
 echo ================================================================
-echo   AUTO-UPDATER ^& MEMORY FLUSHER - BONUS HEDGE BOT MT5 v1.27
+echo   AUTO-UPDATER ^& MEMORY FLUSHER - BONUS HEDGE BOT MT5 v1.34
 echo ================================================================
 echo.
 
-:: 1. Tarik update terbaru dari Git (jika repo git aktif)
+:: 1. Tarik update terbaru dari Git (Force Sync agar tidak gagal karena konflik .ex5 lokal)
 where git >nul 2>nul
 if %errorlevel% equ 0 (
     if exist ".git" (
         echo [1/5] Mengambil update terbaru dari GitHub repo...
-        git pull origin main
+        git fetch origin main
+        git reset --hard origin/main
     )
 ) else (
     echo [1/5] Git tidak terdeteksi, menggunakan file lokal di folder ini...
@@ -52,14 +53,14 @@ if "%COMPILER%"=="" (
 :found_comp
 if not "%COMPILER%"=="" (
     echo [OK] Compiler ditemukan: "%COMPILER%"
-    echo [*] Meng-compile BonusHedge_Master.mq5...
-    "%COMPILER%" /compile:"%~dp0BonusHedge_Master.mq5" /log:"%~dp0compile_master.log"
-    echo [*] Meng-compile BonusHedge_Slave.mq5...
-    "%COMPILER%" /compile:"%~dp0BonusHedge_Slave.mq5" /log:"%~dp0compile_slave.log"
-    type "%~dp0compile_master.log" 2>nul
-    type "%~dp0compile_slave.log" 2>nul
+    for %%M in (BonusHedge_Master BonusHedge_Master_Pair1 BonusHedge_Master_Pair2 BonusHedge_Slave BonusHedge_Slave_Pair1 BonusHedge_Slave_Pair2) do (
+        if exist "%~dp0%%M.mq5" (
+            echo [*] Meng-compile %%M.mq5...
+            "%COMPILER%" /compile:"%~dp0%%M.mq5" /log:"%~dp0compile_%%M.log"
+        )
+    )
 ) else (
-    echo [!] MetaEditor tidak ditemukan. Silakan tekan F4 di MT5 lalu tekan F7 untuk compile.
+    echo [!] MetaEditor tidak ditemukan, menggunakan pre-compiled .ex5 dari GitHub.
 )
 echo.
 
@@ -68,14 +69,18 @@ echo [3/5] Mendeteksi dan menyalin file ke seluruh folder terminal MT5...
 set "TARGET_DIR=%APPDATA%\MetaQuotes\Terminal"
 set "COPIED=0"
 
+if exist "!TARGET_DIR!\Common\Files" (
+    del /F /Q "!TARGET_DIR!\Common\Files\bonus_slave_cfg*.dat" >nul 2>nul
+)
+
 if exist "!TARGET_DIR!" (
     for /d %%T in ("!TARGET_DIR!\*") do (
         if exist "%%T\MQL5\Experts" (
             echo [+] Mengupdate Terminal: %%~nxT
-            copy /Y "%~dp0BonusHedge_Master.mq5" "%%T\MQL5\Experts\" >nul 2>nul
-            copy /Y "%~dp0BonusHedge_Master.ex5" "%%T\MQL5\Experts\" >nul 2>nul
-            copy /Y "%~dp0BonusHedge_Slave.mq5" "%%T\MQL5\Experts\" >nul 2>nul
-            copy /Y "%~dp0BonusHedge_Slave.ex5" "%%T\MQL5\Experts\" >nul 2>nul
+            copy /Y "%~dp0BonusHedge_Master*.mq5" "%%T\MQL5\Experts\" >nul 2>nul
+            copy /Y "%~dp0BonusHedge_Master*.ex5" "%%T\MQL5\Experts\" >nul 2>nul
+            copy /Y "%~dp0BonusHedge_Slave*.mq5" "%%T\MQL5\Experts\" >nul 2>nul
+            copy /Y "%~dp0BonusHedge_Slave*.ex5" "%%T\MQL5\Experts\" >nul 2>nul
             
             if not exist "%%T\MQL5\Presets" mkdir "%%T\MQL5\Presets"
             copy /Y "%~dp0Pair1_Master1.set" "%%T\MQL5\Presets\" >nul 2>nul
@@ -88,13 +93,13 @@ if exist "!TARGET_DIR!" (
 )
 
 :: Cek juga jika ada instalasi portable di C:\Program Files
-for /d %%P in ("C:\Program Files\*MetaTrader*") do (
+for /d %%P in ("C:\Program Files\*MetaTrader*" "C:\Program Files\Prime Codex*") do (
     if exist "%%P\MQL5\Experts" (
         echo [+] Mengupdate Portable Terminal: %%~nxP
-        copy /Y "%~dp0BonusHedge_Master.mq5" "%%P\MQL5\Experts\" >nul 2>nul
-        copy /Y "%~dp0BonusHedge_Master.ex5" "%%P\MQL5\Experts\" >nul 2>nul
-        copy /Y "%~dp0BonusHedge_Slave.mq5" "%%P\MQL5\Experts\" >nul 2>nul
-        copy /Y "%~dp0BonusHedge_Slave.ex5" "%%P\MQL5\Experts\" >nul 2>nul
+        copy /Y "%~dp0BonusHedge_Master*.mq5" "%%P\MQL5\Experts\" >nul 2>nul
+        copy /Y "%~dp0BonusHedge_Master*.ex5" "%%P\MQL5\Experts\" >nul 2>nul
+        copy /Y "%~dp0BonusHedge_Slave*.mq5" "%%P\MQL5\Experts\" >nul 2>nul
+        copy /Y "%~dp0BonusHedge_Slave*.ex5" "%%P\MQL5\Experts\" >nul 2>nul
         if not exist "%%P\MQL5\Presets" mkdir "%%P\MQL5\Presets"
         copy /Y "%~dp0Pair1_Master1.set" "%%P\MQL5\Presets\" >nul 2>nul
         copy /Y "%~dp0Pair1_Slave2.set" "%%P\MQL5\Presets\" >nul 2>nul
@@ -108,14 +113,13 @@ echo.
 echo [4/5] Berhasil mendistribusikan file ke !COPIED! terminal MT5!
 echo.
 
-:: 4. FLUSH MEMORY & RESTART TERMINAL (AGAR KODE BARU LANGSUNG AKTIF DI RAM)
-echo [5/5] FLUSH MEMORI MT5:
+:: 4. FLUSH MEMORY, UPDATE CHART PROFILE CACHE (.chr) 1.15 -> 1.10 & RESTART TERMINAL
+echo [5/5] FLUSH MEMORI MT5 ^& MIGRASI CACHE CHART (1.15 -^> 1.10):
 echo Me-restart semua terminal MT5 secara otomatis agar memori RAM 100%% bersih...
-echo [*] Mendata path terminal yang sedang berjalan dan me-restart...
-powershell -NoProfile -Command "$paths = Get-Process terminal64 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path -Unique; if($paths) { Stop-Process -Name terminal64 -Force; Start-Sleep -Seconds 3; foreach($p in $paths) { Start-Process $p }; Write-Host '>>> [BERHASIL] Semua terminal MT5 telah direstart dan memuat EA versi 1.27 ke RAM!' -ForegroundColor Green } else { Write-Host '[INFO] Tidak ada terminal64.exe yang sedang berjalan.' -ForegroundColor Yellow }"
+powershell -NoProfile -Command "$paths = Get-Process terminal64 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path -Unique; if($paths) { Stop-Process -Name terminal64 -Force; Start-Sleep -Seconds 3 }; $chrs = @(); if(Test-Path \"$env:APPDATA\MetaQuotes\Terminal\") { $chrs += Get-ChildItem -Path \"$env:APPDATA\MetaQuotes\Terminal\" -Filter '*.chr' -Recurse -ErrorAction SilentlyContinue }; $chrs += Get-ChildItem -Path 'C:\Program Files' -Filter '*.chr' -Recurse -ErrorAction SilentlyContinue; foreach($c in $chrs) { try { $raw = [System.IO.File]::ReadAllText($c.FullName); if($raw -match '1\.15') { $new = $raw -replace 'InpSlaveMultiplier=1\.15','InpSlaveMultiplier=1.10' -replace 'InpLotMultiplier=1\.15','InpLotMultiplier=1.10'; [System.IO.File]::WriteAllText($c.FullName, $new) } } catch {} }; if($paths) { foreach($p in $paths) { Start-Process $p }; Write-Host '>>> [BERHASIL] Semua terminal MT5 telah direstart dan memuat EA v1.34 (Multiplier 1.10) ke RAM!' -ForegroundColor Green } else { Write-Host '[INFO] Cache chart telah di-upgrade ke 1.10. Silakan nyalakan terminal MT5.' -ForegroundColor Yellow }"
 
 echo.
 echo ================================================================
-echo   UPDATE v1.27 SELESAI DENGAN SUKSES!
+echo   UPDATE v1.34 (MULTIPLIER 1.10) SELESAI DENGAN SUKSES!
 echo ================================================================
 pause

@@ -271,8 +271,8 @@ int OnInit()
       }
    }
 
-   // INITIAL LOT MULTIPLIER (Otomatis ditimpa oleh Master saat sinkron)
-   m_lot_multiplier = (InpLotMultiplier < 1.00) ? 1.10 : InpLotMultiplier;
+   // INITIAL LOT MULTIPLIER (Otomatis ditimpa oleh Master saat sinkron, auto-migrasi cache 1.15 -> 1.10)
+   m_lot_multiplier = (InpLotMultiplier < 1.00 || MathAbs(InpLotMultiplier - 1.15) < 0.001) ? 1.10 : InpLotMultiplier;
    ReadSlaveConfigFile();
 
    Print("🟢 [BonusHedge_Slave v1.34] Initialized on ", m_symbol,
@@ -552,7 +552,7 @@ bool ReadMasterState()
             double mult = FileReadDouble(file_handle);
             if(GetLastError() == 0 && mult >= 1.00 && mult <= 5.00)
             {
-               m_lot_multiplier = mult;
+               m_lot_multiplier = (MathAbs(mult - 1.15) < 0.001) ? 1.10 : mult;
             }
          }
       }
@@ -614,7 +614,7 @@ void ReadSlaveConfigFile()
       double mult = FileReadDouble(h);
       if(GetLastError() == 0 && mult >= 1.00 && mult <= 5.00)
       {
-         m_lot_multiplier = mult;
+         m_lot_multiplier = (MathAbs(mult - 1.15) < 0.001) ? 1.10 : mult;
       }
    }
    FileClose(h);

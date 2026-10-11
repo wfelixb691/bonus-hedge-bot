@@ -425,12 +425,24 @@ double GetEffectiveSpreadBuffer()
 }
 
 //+------------------------------------------------------------------+
+//| Helper: Smart Auto-Migration for Slave Multiplier (1.15 -> 1.10) |
+//| Jika chart MT5 masih menyimpan cache default lama 1.15,          |
+//| otomatis gunakan 1.10 tanpa perlu klik Reset manual di F7!       |
+//+------------------------------------------------------------------+
+double GetEffectiveSlaveMultiplier()
+{
+   if(MathAbs(InpSlaveMultiplier - 1.15) < 0.001 || InpSlaveMultiplier < 1.00)
+      return 1.10;
+   return InpSlaveMultiplier;
+}
+
+//+------------------------------------------------------------------+
 //| Helper: Estimasi Kebutuhan Margin Riil Slave untuk 1 Layer Baru  |
 //| Melindungi Slave agar Master TIDAK BUKA LAYER jika Slave sesak!  |
 //+------------------------------------------------------------------+
 double EstimateSlaveRequiredMargin(double master_lot)
 {
-   double slave_lot = master_lot * InpSlaveMultiplier;
+   double slave_lot = master_lot * GetEffectiveSlaveMultiplier();
    double step_l = SymbolInfoDouble(m_symbol, SYMBOL_VOLUME_STEP);
    if(step_l <= 0) step_l = 0.01;
    slave_lot = MathFloor(slave_lot / step_l) * step_l;
@@ -501,7 +513,7 @@ int OnInit()
    Print("🟢 [BonusHedge_Master v1.34] Initialized on ", m_symbol, " (Pair ID: ", InpPairID, ", Magic: ", m_magic,
          ", Ref Balance: $", DoubleToString(ref_bal, 2),
          ", Lot: ", DoubleToString(eff_lot, 2), "L", (InpAutoLotFromBalance ? " [AUTO]" : " [MANUAL]"),
-         ", Slave Mult: x", DoubleToString(InpSlaveMultiplier, 2),
+         ", Slave Mult: x", DoubleToString(GetEffectiveSlaveMultiplier(), 2),
          ", Target TP: $", DoubleToString(base_tp, 2), " (", (InpBasketTPDollars > 0.0 ? "Flat" : (DoubleToString(InpTargetProfitPct, 1) + "%")),
          " + Buffer $", DoubleToString(m_spread_buffer, 2), ")",
          ", GridStep: ", DoubleToString(InpGridStepPoints, 0), "pts, AutoLoop: ", (InpPauseAfterCycle ? "OFF" : "ON"), ")");
@@ -1916,7 +1928,7 @@ void BroadcastMasterState()
 
    // Trailing Extension: Multiplier Sync (Tag 0x4D554C54 = 'MULT')
    FileWriteLong(file_handle, 0x4D554C54);
-   FileWriteDouble(file_handle, InpSlaveMultiplier);
+   FileWriteDouble(file_handle, GetEffectiveSlaveMultiplier());
 
    FileFlush(file_handle);
    FileClose(file_handle);
@@ -1942,7 +1954,7 @@ void BroadcastSlaveConfig()
    if(handle == INVALID_HANDLE) return;
 
    FileWriteLong(handle, 0x43464731); // "CFG1"
-   FileWriteDouble(handle, InpSlaveMultiplier);
+   FileWriteDouble(handle, GetEffectiveSlaveMultiplier());
    FileFlush(handle);
    FileClose(handle);
 }
@@ -2206,7 +2218,8 @@ void UpdateDashboard()
    else if(IsHighImpactNewsNearby())
       shield_info = "📰 NEWS PAUSE (" + m_news_title + ")";
 
-   double slave_lot_est = MathRound(effective_lot * InpSlaveMultiplier * 100.0) / 100.0;
+   double eff_slave_mult = GetEffectiveSlaveMultiplier();
+   double slave_lot_est = MathRound(effective_lot * eff_slave_mult * 100.0) / 100.0;
    double init_cap      = GetInitialTotalCapital();
 
    string text = "\n" +
@@ -2218,7 +2231,7 @@ void UpdateDashboard()
       "    Symbol          : " + m_symbol + "\n" +
       "    Account Login   : " + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "\n" +
       "    Balance / Equity: $" + DoubleToString(balance, 2) + " / $" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2) + "\n" +
-      "    Effective Lot   : " + DoubleToString(effective_lot, 2) + "L " + (InpAutoLotFromBalance ? ("(Tier $" + DoubleToString(init_cap, 0) + " Fix)") : "(Manual)") + " | Slave: " + DoubleToString(slave_lot_est, 2) + "L (x" + DoubleToString(InpSlaveMultiplier, 2) + ")\n" +
+      "    Effective Lot   : " + DoubleToString(effective_lot, 2) + "L " + (InpAutoLotFromBalance ? ("(Tier $" + DoubleToString(init_cap, 0) + " Fix)") : "(Manual)") + " | Slave: " + DoubleToString(slave_lot_est, 2) + "L (x" + DoubleToString(eff_slave_mult, 2) + ")\n" +
       "    Free Margin     : $" + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_FREE), 2) + " (" + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_LEVEL), 1) + "%)\n" +
       "    Active Layers   : " + IntegerToString(total_positions) + " / " + IntegerToString(InpMaxLayers) + "\n" +
       "    Master Floating : $" + DoubleToString(total_profit, 2) + "\n" +
