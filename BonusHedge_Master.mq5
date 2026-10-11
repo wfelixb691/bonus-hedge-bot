@@ -29,7 +29,7 @@ input double   InpSpreadBufferUSD   = 0.0;           // Spread Buffer USD (0 = O
 input bool     InpPauseAfterCycle   = false;         // Pause After Cycle (false = auto loop buka lagi terus-menerus)
 
 input group "=== SLAVE HEDGING CONFIG (DARI MASTER) ==="
-input double   InpSlaveMultiplier   = 1.15;          // Multiplier Lot Slave (1.15 = 1.00 Master -> 1.15 Slave, Pembakaran Bonus Optimal)
+input double   InpSlaveMultiplier   = 1.10;          // Multiplier Lot Slave (1.10 = 1.00 Master -> 1.10 Slave, Pembakaran Bonus Optimal)
 
 input group "=== INTERVENSI MANUAL ==="
 input bool     InpCloseAll          = false;         // Intervensi Manual: Tutup SEMUA Posisi Master + Slave Sekarang (default: false)

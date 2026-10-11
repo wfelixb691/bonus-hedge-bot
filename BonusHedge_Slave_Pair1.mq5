@@ -17,7 +17,7 @@ input int      InpPairID            = 1;             // [KHUSUS PAIR 1] Pair Gro
 // CATATAN: Lot Multiplier sekarang otomatis dikontrol terpusat dari Master EA!
 // Anda cukup memilih Pair Group ID di atas. Parameter di bawah hanya fallback jika Master belum online.
 input group "=== FALLBACK PARAMETERS (OPTIONAL) ==="
-input double   InpLotMultiplier     = 1.15;          // Fallback Lot Multiplier (Hanya dipakai jika Master belum terhubung)
+input double   InpLotMultiplier     = 1.10;          // Fallback Lot Multiplier (Hanya dipakai jika Master belum terhubung)
 
 //--- Internal Engine Constants (Fixed for Optimal Stability & Zero User Error)
 const double   InpMinBonusCredit    = 40.0;          // Min Bonus Credit $ Required to Start (Mode Kuras Bonus s/d $40)
@@ -56,7 +56,7 @@ bool           m_pending_close_all  = false;  // Slave Self-Defense: Tahan CLOSE
 ulong          m_pending_close_start_tick = 0;// Waktu mulai penundaan CLOSE_ALL
 
 //--- Smart Auto-Migration Effective Variables (v1.28)
-double         m_lot_multiplier     = 1.05;
+double         m_lot_multiplier     = 1.10;
 
 // Anti-Flapping & Circuit Breaker Tracking
 datetime       m_cycle_start_time       = 0;  // v1.27: Waktu awal siklus Slave (hanya dicatat saat hedge pertama)
