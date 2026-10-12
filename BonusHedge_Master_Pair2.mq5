@@ -12,8 +12,8 @@
 
 //--- User-Facing Input Parameters (Clean, Simple & Essential Only)
 input group "=== IDENTITAS PASANGAN TRADING ==="
-input int      InpPairID            = 1;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
-input string   InpClientName        = "Client #1";   // Nama Client / Investor (e.g. Pak Welly)
+input int      InpPairID            = 2;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
+input string   InpClientName        = "Client #2";   // Nama Client / Investor (e.g. Pak Welly)
 
 input group "=== AUTO LOT DARI BALANCE ==="
 input bool     InpAutoLotFromBalance = true;         // Auto-Scale Lot dari Balance ($2k->0.10, $5k->0.20, $10k->0.40)
@@ -78,6 +78,7 @@ input int      InpWebIntervalSec    = 2;             // Telemetry Interval (Seco
 const int      InpTimerMS           = 50;            // Sync Interval in ms
 
 //--- Resolved Runtime Variables (Generated Automatically from InpPairID)
+int            m_pair_id            = 1;
 ulong          m_magic              = 888111;
 string         m_comment_prefix     = "GRID_S";
 string         m_master_file        = "bonus_hedge_master.dat";
@@ -207,7 +208,7 @@ bool IsMasterPosition(ulong ticket)
    if(magic == (long)m_magic) return true;
    // STRICT MULTI-PAIR ISOLATION (v1.27):
    // Toleransi magic lama hanya berlaku untuk Pair 1. Pair 2 (888102) DILARANG keras menyentuh magic 888101!
-   if(InpPairID <= 1 && (magic == 888111 || magic == 888101)) return true;
+   if(m_pair_id <= 1 && (magic == 888111 || magic == 888101)) return true;
    if(InpIncludeManualTrades && magic == 0) return true;
    return false;
 }
@@ -485,7 +486,9 @@ double EstimateSlaveRequiredMargin(double master_lot)
 
 void InitPairConfiguration()
 {
-   int pid = (InpPairID <= 1) ? 1 : InpPairID;
+   string prog = MQLInfoString(MQL_PROGRAM_NAME);
+   int pid = (StringFind(prog, "Pair2", 0) >= 0 && InpPairID <= 1) ? 2 : ((InpPairID <= 1) ? 1 : InpPairID);
+   m_pair_id = pid;
    string suffix = (pid == 1) ? "" : ("_" + IntegerToString(pid));
 
    m_magic          = 888100 + (ulong)pid; // 888101, 888102, 888103, dst.
@@ -534,7 +537,7 @@ int OnInit()
 
    BroadcastSlaveConfig();
 
-   Print("🟢 [BonusHedge_Master v1.35] Initialized on ", m_symbol, " (Pair ID: ", InpPairID, ", Magic: ", m_magic,
+   Print("🟢 [BonusHedge_Master v1.35] Initialized on ", m_symbol, " (Pair ID: ", m_pair_id, ", Magic: ", m_magic,
          ", Ref Balance: $", DoubleToString(ref_bal, 2),
          ", Lot: ", DoubleToString(eff_lot, 2), "L", (InpAutoLotFromBalance ? " [AUTO]" : " [MANUAL]"),
          ", Slave Mult: x", DoubleToString(GetEffectiveSlaveMultiplier(), 2),
@@ -550,7 +553,7 @@ int OnInit()
    {
       SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.35 AKTIF]</b>\n" +
                           "👑 Akun Master: <b>" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "</b>\n" +
-                          "📌 Pair ID: <b>#" + IntegerToString(InpPairID) + "</b> (Magic: " + IntegerToString(m_magic) + ")\n" +
+                          "📌 Pair ID: <b>#" + IntegerToString(m_pair_id) + "</b> (Magic: " + IntegerToString(m_magic) + ")\n" +
                           "📊 Symbol: <b>" + m_symbol + "</b> | Base Lot: <b>" + DoubleToString(eff_lot, 2) + "L</b> (" + (InpAutoLotFromBalance ? "Auto Balance" : "Manual") + ")\n" +
                           "⏱️ Laporan live akan dikirim setiap " + IntegerToString(InpTelegramIntervalMin) + " menit.");
    }
@@ -1041,7 +1044,7 @@ int CloseUnhedgedMasterPositions()
          ulong ticket = PositionGetTicket(i);
          if(ticket > 0
             && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpPairID <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
+            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (m_pair_id <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
          {
             if(!IsMasterTicketHedgedBySlave(ticket))
             {
@@ -1065,7 +1068,7 @@ int CloseUnhedgedMasterPositions()
          ulong ticket = PositionGetTicket(i);
          if(ticket > 0
             && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpPairID <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
+            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (m_pair_id <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
          {
             master_ea++;
          }
@@ -1076,7 +1079,7 @@ int CloseUnhedgedMasterPositions()
          ulong ticket = PositionGetTicket(i);
          if(ticket > 0
             && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpPairID <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
+            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (m_pair_id <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
          {
             if(CloseMasterPositionByTicket(ticket))
                closed_orphans++;
@@ -1112,7 +1115,7 @@ bool CheckSlaveLiquidationHarvest()
       if(ticket > 0 && IsMasterPosition(ticket))
       {
          master_count++;
-         if(PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpPairID <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111))
+         if(PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (m_pair_id <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111))
             master_ea_count++;
       }
    }
@@ -2236,7 +2239,7 @@ void BroadcastMasterState()
 //+------------------------------------------------------------------+
 void BroadcastSlaveConfig()
 {
-   int pid = (InpPairID <= 1) ? 1 : InpPairID;
+   int pid = (m_pair_id <= 1) ? 1 : m_pair_id;
    string suffix = (pid == 1) ? "" : ("_" + IntegerToString(pid));
    string cfg_file = "bonus_slave_cfg" + suffix + ".dat";
 
@@ -2525,7 +2528,7 @@ void UpdateDashboard()
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
       "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.35             ║\n" +
       "  ╠════════════════════════════════════════════════════════════════╣\n" +
-      "    Pair Group ID   : #" + IntegerToString(InpPairID) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
+      "    Pair Group ID   : #" + IntegerToString(m_pair_id) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
       "    Bridge Files    : " + m_master_file + " <-> " + m_slave_file + "\n" +
       "    Symbol          : " + m_symbol + "\n" +
       "    Account Login   : " + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "\n" +
@@ -2719,7 +2722,7 @@ void SendWebTelemetry()
          total_profit += p_prof;
 
          // Find matching slave position
-         string slave_prefix = (InpPairID <= 1) ? "CT#" : ("CT" + IntegerToString(InpPairID) + "#");
+         string slave_prefix = (m_pair_id <= 1) ? "CT#" : ("CT" + IntegerToString(m_pair_id) + "#");
          string expected_comment = slave_prefix + IntegerToString(ticket);
          int s_idx = -1;
          for(int s = 0; s < m_slave_pos_count; s++)
@@ -2783,7 +2786,7 @@ void SendWebTelemetry()
                     ",\"client_name\":\"" + InpClientName + "\"" +
                     ",\"referral_code\":\"" + InpReferralCode + "\"" +
                     ",\"symbol\":\"" + m_symbol + "\"" +
-                    ",\"pair_id\":" + IntegerToString(InpPairID) +
+                    ",\"pair_id\":" + IntegerToString(m_pair_id) +
                     ",\"shield_status\":\"" + shield_status + "\"" +
                     ",\"cur_spread\":" + IntegerToString(cur_spread) +
                     ",\"net_floating\":" + DoubleToString(net_fl, 2) +
@@ -2853,7 +2856,7 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
       // Jika ada tiket Master ditutup paksa oleh broker (Stop Out / Margin Call):
       if(deal_entry == DEAL_ENTRY_OUT && deal_reason == DEAL_REASON_SO)
       {
-         if(deal_magic == (long)m_magic || (InpPairID <= 1 && (deal_magic == 888111 || deal_magic == 888101)) || deal_magic == 0)
+         if(deal_magic == (long)m_magic || (m_pair_id <= 1 && (deal_magic == 888111 || deal_magic == 888101)) || deal_magic == 0)
          {
             Print("🚨⚡ [MASTER BROKER STOP OUT DETECTED] Tiket Master #", trans.position,
                   " (Deal #", trans.deal, ") TER-STOP OUT BROKER! Mengirim sinyal darurat CLOSE_ALL ke Slave!");

@@ -12,7 +12,7 @@
 
 //--- User-Facing Input Parameters (Clean, Simple & Essential Only)
 input group "=== IDENTITAS PASANGAN TRADING ==="
-input int      InpPairID            = 1;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
+input int      InpPairID            = 2;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
 
 // CATATAN: Lot Multiplier sekarang otomatis dikontrol terpusat dari Master EA!
 // Anda cukup memilih Pair Group ID di atas. Parameter di bawah hanya fallback jika Master belum online.
@@ -26,6 +26,7 @@ const int      SLIPPAGE_POINTS      = 50;            // Slippage Points Toleranc
 const double   MAX_SPREAD_POINTS    = 60.0;          // Max Spread Points for Flash Debounce
 
 //--- Resolved Runtime Variables (Generated Automatically from InpPairID)
+int            m_pair_id            = 1;
 ulong          m_magic              = 888991;
 string         m_comment_prefix     = "CT#";
 string         m_master_file        = "bonus_hedge_master.dat";
@@ -230,7 +231,7 @@ bool IsSlaveHedgePosition(ulong ticket)
    }
 
    // Fallback: jika broker menghapus magic & comment dan hanya ada 1 EA di terminal ini
-   if(InpPairID <= 1 && pos_magic == 0 && StringFind(pos_cmt, "CT") < 0)
+   if(m_pair_id <= 1 && pos_magic == 0 && StringFind(pos_cmt, "CT") < 0)
       return true;
 
    return false;
@@ -238,7 +239,9 @@ bool IsSlaveHedgePosition(ulong ticket)
 
 void InitPairConfiguration()
 {
-   int pid = (InpPairID <= 1) ? 1 : InpPairID;
+   string prog = MQLInfoString(MQL_PROGRAM_NAME);
+   int pid = (StringFind(prog, "Pair2", 0) >= 0 && InpPairID <= 1) ? 2 : ((InpPairID <= 1) ? 1 : InpPairID);
+   m_pair_id = pid;
    string suffix = (pid == 1) ? "" : ("_" + IntegerToString(pid));
 
    m_magic          = 888990 + (ulong)pid; // 888991, 888992, 888993, dst.
@@ -298,7 +301,7 @@ int OnInit()
    ReadSlaveConfigFile();
 
    Print("🟢 [BonusHedge_Slave v1.35] Initialized on ", m_symbol,
-         " (Pair ID: #", InpPairID, ", Magic: ", m_magic, ", Mult: ", DoubleToString(m_lot_multiplier, 2), "x)");
+         " (Pair ID: #", m_pair_id, ", Magic: ", m_magic, ", Mult: ", DoubleToString(m_lot_multiplier, 2), "x)");
 
    // Set Chart Foreground Text to Bright Yellow for maximum crisp readability
    ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);
@@ -660,7 +663,7 @@ bool ReadMasterState()
 //+------------------------------------------------------------------+
 void ReadSlaveConfigFile()
 {
-   int pid = (InpPairID <= 1) ? 1 : InpPairID;
+   int pid = (m_pair_id <= 1) ? 1 : m_pair_id;
    string suffix = (pid == 1) ? "" : ("_" + IntegerToString(pid));
    string cfg_file = "bonus_slave_cfg" + suffix + ".dat";
    if(!FileIsExist(cfg_file, FILE_COMMON)) return;
@@ -1308,7 +1311,7 @@ void UpdateDashboard(double slave_profit, double combined_net_profit)
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
       "  ║   ⚡ DUAL-MT5 BONUS HEDGING - SLAVE LP ENGINE v1.35           ║\n" +
       "  ╠════════════════════════════════════════════════════════════════╣\n" +
-      "    Pair Group ID   : #" + IntegerToString(InpPairID) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
+      "    Pair Group ID   : #" + IntegerToString(m_pair_id) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
       "    Bridge Files    : " + m_master_file + " <-> " + m_slave_file + "\n" +
       "    [MASTER ACCOUNT " + IntegerToString(m_master_login) + "]\n" +
       "      Equity / Balance: $" + DoubleToString(m_master_equity, 2) + " / $" + DoubleToString(m_master_balance, 2) + "\n" +
