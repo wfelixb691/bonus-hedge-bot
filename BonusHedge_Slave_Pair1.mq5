@@ -846,18 +846,8 @@ void SyncOpenPositions()
          continue; // Order sedang diproses bursa, tahan agar tidak terjadi order ganda!
       }
 
-      double my_bal  = AccountInfoDouble(ACCOUNT_BALANCE);
-      double eff_mult = m_lot_multiplier;
-      if(my_bal > 100.0 && my_credit > 0.0)
-      {
-         double max_safe_mult = (my_bal + my_credit) / (my_bal + 0.60 * my_credit);
-         if(max_safe_mult < 1.02) max_safe_mult = 1.02;
-         if(eff_mult > max_safe_mult)
-            eff_mult = NormalizeDouble(max_safe_mult, 2);
-      }
-
       bool already_hedged = false;
-      double want_raw     = m_master_positions[m_idx].volume * eff_mult;
+      double want_raw     = m_master_positions[m_idx].volume * m_lot_multiplier;
       double want_lot     = MathRound(want_raw * 100.0) / 100.0;
       want_lot            = MathMax(0.01, MathMin(50.0, want_lot));
 
@@ -889,7 +879,7 @@ void SyncOpenPositions()
          int have_count = 0, need_count = 0;
          for(int mm = 0; mm < m_master_pos_count; mm++)
          {
-            double wlot = MathRound(m_master_positions[mm].volume * eff_mult * 100.0) / 100.0;
+            double wlot = MathRound(m_master_positions[mm].volume * m_lot_multiplier * 100.0) / 100.0;
             wlot = MathMax(0.01, MathMin(50.0, wlot));
             if(MathAbs(wlot - want_lot) < 0.005 && (int)m_master_positions[mm].type == (int)m_master_positions[m_idx].type)
                need_count++;

@@ -465,21 +465,9 @@ double GetEffectiveSpreadBuffer()
 //+------------------------------------------------------------------+
 double GetEffectiveSlaveMultiplier()
 {
-   double base_mult = (MathAbs(InpSlaveMultiplier - 1.15) < 0.001 || InpSlaveMultiplier < 1.00) ? 1.10 : InpSlaveMultiplier;
-
-   // DYNAMIC BONUS-PROTECTED LOT RATIO GUARD:
-   // Jika Saldo Kas Slave (m_slave_balance) sudah membengkak jauh lebih besar dari Credit Bonus (m_slave_credit)
-   // akibat menang TP beruntun, batasi rasio lot Slave secara otomatis agar jika harga Emas turun dan Slave
-   // terkena Stop Out, selisih lot ekstra di Slave TIDAK PERNAH memakan habis bonus atau menyebabkan net cash loss!
-   if(m_slave_online && m_slave_balance > 100.0 && m_slave_credit > 0.0)
-   {
-      // Jaminan matematis minimal 60% Credit Bonus tetap menjadi Net Profit bersih saat Slave Stop Out:
-      double max_safe_mult = (m_slave_balance + m_slave_credit) / (m_slave_balance + 0.60 * m_slave_credit);
-      if(max_safe_mult < 1.02) max_safe_mult = 1.02;
-      if(base_mult > max_safe_mult)
-         base_mult = NormalizeDouble(max_safe_mult, 2);
-   }
-   return base_mult;
+   if(MathAbs(InpSlaveMultiplier - 1.15) < 0.001 || InpSlaveMultiplier < 1.00)
+      return 1.10;
+   return InpSlaveMultiplier;
 }
 
 //+------------------------------------------------------------------+
