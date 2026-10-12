@@ -159,6 +159,9 @@ void   CheckUnhedgedOrphanWatchdog();
 void   ManageGrid();
 void   CloseAllMasterPositions();
 bool   CloseMasterPositionByTicket(ulong target_ticket);
+bool   IsMasterTicketHedgedBySlave(ulong master_ticket);
+int    CloseUnhedgedMasterPositions();
+bool   IsRolloverOrMarketOpenWindow();
 void   ExecuteManualCloseAll(string source_reason);
 void   CreateResumeButton();
 void   CreateManualCloseButton();
@@ -562,6 +565,7 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
             return;
          }
          m_cycle_paused = false;
+         m_harvest_in_progress = false;
          ObjectDelete(0, "BTN_RESUME_CYCLE");
          ChartRedraw(0);
          Print("▶️ [USER ACTION] Bot di-RESUME oleh user! Siap membuka siklus order baru.");
@@ -581,6 +585,7 @@ void ExecuteManualCloseAll(string source_reason)
    Print("🚨 [MANUAL CLOSE ALL TRIGGERED] Alasan: ", source_reason, "! Menutup semua posisi di 2 Akun (Master + Slave) secara simultan...");
    m_closing_active = true;
    m_closing_lock_until = TimeCurrent() + 6;
+   m_harvest_in_progress = false;
 
    // 1. Kirim sinyal tutup darurat ke Slave LEBIH DULU
    SendCommandToSlave("CLOSE_ALL");
@@ -945,23 +950,130 @@ void CheckNakedExposureAlert()
 //| IRONCLAD SAFETY: Trigger ONLY when Slave is genuinely MC/Liquidated|
 //| Multi-Cycle Debounce (3 cycles = 150ms) + Supports Equity <= 0   |
 //+------------------------------------------------------------------+
+//| Helper: Check if a specific Master ticket is currently hedged    |
+//| in m_slave_positions[] snapshot                                  |
+//+------------------------------------------------------------------+
+bool IsMasterTicketHedgedBySlave(ulong master_ticket)
+{
+   if(master_ticket <= 0 || m_slave_pos_count <= 0) return false;
+   string t_str = IntegerToString(master_ticket);
+
+   for(int j = 0; j < m_slave_pos_count; j++)
+   {
+      if(StringFind(m_slave_positions[j].comment, t_str) >= 0)
+         return true;
+   }
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| Helper: Close ONLY Master positions that lost their Slave hedge  |
+//| (Orphan / Partial Stop-Out Harvest without killing hedged layers)|
+//+------------------------------------------------------------------+
+int CloseUnhedgedMasterPositions()
+{
+   if(m_slave_pos_count <= 0)
+   {
+      CloseAllMasterPositions();
+      return 999;
+   }
+
+   int tagged_slave_count = 0;
+   for(int j = 0; j < m_slave_pos_count; j++)
+   {
+      if(StringFind(m_slave_positions[j].comment, "CT") >= 0)
+         tagged_slave_count++;
+   }
+
+   int closed_orphans = 0;
+
+   // A. Pencocokan Presisi Per-Tiket (Mode Normal saat comment CT#<ticket> tersedia):
+   if(tagged_slave_count > 0)
+   {
+      for(int i = PositionsTotal() - 1; i >= 0; i--)
+      {
+         ulong ticket = PositionGetTicket(i);
+         if(ticket > 0
+            && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
+            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpPairID <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
+         {
+            if(!IsMasterTicketHedgedBySlave(ticket))
+            {
+               if(CloseMasterPositionByTicket(ticket))
+               {
+                  closed_orphans++;
+                  Print("🎯⚡ [ORPHAN / PARTIAL SO HARVEST] Menutup HANYA tiket Master #", ticket,
+                        " yang kehilangan pasangan hedge di Slave! Layer lain yang masih ter-hedge TETAP AMAN.");
+               }
+            }
+         }
+      }
+   }
+
+   // B. Fallback jika comment dihapus broker Slave: tutup hanya sebanyak selisih (master_ea - m_slave_pos_count)
+   if(closed_orphans == 0)
+   {
+      int master_ea = 0;
+      for(int i = PositionsTotal() - 1; i >= 0; i--)
+      {
+         ulong ticket = PositionGetTicket(i);
+         if(ticket > 0
+            && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
+            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpPairID <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
+         {
+            master_ea++;
+         }
+      }
+      int excess = master_ea - m_slave_pos_count;
+      for(int i = PositionsTotal() - 1; i >= 0 && closed_orphans < excess; i--)
+      {
+         ulong ticket = PositionGetTicket(i);
+         if(ticket > 0
+            && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
+            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpPairID <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
+         {
+            if(CloseMasterPositionByTicket(ticket))
+               closed_orphans++;
+         }
+      }
+   }
+
+   if(closed_orphans > 0)
+   {
+      BroadcastMasterState();
+   }
+   return closed_orphans;
+}
+
+//+------------------------------------------------------------------+
+//| Check if Slave got closed / stopped out / liquidated             |
+//| IRONCLAD SAFETY: Trigger ONLY when Slave is genuinely MC/Liquidated|
+//| Supports both Partial Layer-by-Layer SO & Final Full Liquidation |
+//+------------------------------------------------------------------+
 bool CheckSlaveLiquidationHarvest()
 {
    if(!m_slave_online || m_closing_active) return false;
 
    static int s_slave_mc_counter = 0;
+   static int s_partial_so_counter = 0;
 
    // Panen likuidasi hanya relevan jika Master memang sedang memegang posisi terbuka!
    int master_count = 0;
+   int master_ea_count = 0;
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
       if(ticket > 0 && IsMasterPosition(ticket))
+      {
          master_count++;
+         if(PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (InpPairID <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111))
+            master_ea_count++;
+      }
    }
    if(master_count == 0)
    {
       s_slave_mc_counter = 0;
+      s_partial_so_counter = 0;
       return false;
    }
 
@@ -972,10 +1084,45 @@ bool CheckSlaveLiquidationHarvest()
    if(m_last_order_open_time > 0 && (TimeCurrent() - m_last_order_open_time < 15))
    {
       s_slave_mc_counter = 0;
+      s_partial_so_counter = 0;
       return false; // Jangan memicu panen selama jeda eksekusi order (mencegah flapping 0 detik)
    }
 
-   // 2. Evaluasi Likuidasi Riil Broker:
+   // 2A. DETEKSI PARTIAL STOP OUT BERJENJANG (LAYER-BY-LAYER HARVEST VIA TELEMETRY):
+   // Jika Slave masih punya sisa posisi (m_slave_pos_count > 0), TAPI jumlahnya berkurang (< master_ea_count)
+   // saat Slave sedang di zona margin kritis / saldo kas sudah minus terbakar ke Credit Bonus:
+   // Tutup HANYA layer Master yang pasangannya mati di Slave! Biarkan sisa layer terus membakar sisa bonus!
+   bool is_slave_under_stress = (m_slave_balance <= 50.0
+                                 || m_slave_equity <= 650.0
+                                 || (m_slave_margin_level > 0.0 && m_slave_margin_level <= 70.0)
+                                 || m_harvest_in_progress);
+   if(m_slave_login > 0 && m_slave_pos_count > 0 && m_slave_pos_count < master_ea_count && is_slave_under_stress)
+   {
+      s_partial_so_counter++;
+      if(s_partial_so_counter >= 4) // 4 siklus (200ms) konfirmasi stabil
+      {
+         s_partial_so_counter = 0;
+         m_harvest_in_progress = true; // Kunci buka layer baru selama panen berjenjang berlangsung
+         m_closing_active = true;
+         m_closing_lock_until = TimeCurrent() + 4;
+         int harvested = CloseUnhedgedMasterPositions();
+         m_closing_active = false;
+         m_last_order_time = TimeCurrent();
+         if(harvested > 0)
+         {
+            Print("🎯⚡ [TELEMETRY PARTIAL SO HARVEST] Berhasil memanen ", harvested,
+                  " layer Master yang ter-Stop Out di Slave! Sisa ", m_slave_pos_count,
+                  " layer tetap aktif membakar sisa bonus Slave (Equity Slave: $", DoubleToString(m_slave_equity, 2), ").");
+            return true;
+         }
+      }
+   }
+   else
+   {
+      s_partial_so_counter = 0;
+   }
+
+   // 2B. Evaluasi Likuidasi Final Broker (Seluruh posisi Slave habis = 0):
    bool is_slave_liquidated = false;
    if(m_slave_login > 0)
    {
@@ -984,7 +1131,7 @@ bool CheckSlaveLiquidationHarvest()
       {
          is_slave_liquidated = true;
       }
-      // B. Jika posisi Slave ter-stop out oleh broker (posisi jadi 0 saat Master masih pegang):
+      // B. Jika seluruh posisi Slave ter-stop out oleh broker (posisi jadi 0 saat Master masih pegang):
       else if(m_slave_pos_count == 0 && master_count > 0)
       {
          // Jika Burner Mode aktif (sisa bonus masih diperjuangkan): HANYA anggap likuidasi jika equity <= $25
@@ -994,8 +1141,10 @@ bool CheckSlaveLiquidationHarvest()
          }
          else
          {
-            // Mode normal: Stop Out terjadi ketika equity <= $50 atau balance minus dan credit habis
-            if(m_slave_equity <= 50.0 || (m_slave_balance <= 50.0 && m_slave_credit < 40.0))
+            // Mode normal: Stop Out pada Gold terjadi saat Margin Level menyentuh 20%-30%
+            // (di mana Equity Slave bisa masih $150-$300 dan Credit B Out baru ditarik broker 30 menit kemudian,
+            // tetapi Balance kas Slave sudah <= $50 / minus, atau m_harvest_in_progress sudah aktif).
+            if(m_slave_equity <= 250.0 || m_slave_balance <= 50.0 || m_harvest_in_progress)
                is_slave_liquidated = true;
          }
       }
@@ -1004,13 +1153,15 @@ bool CheckSlaveLiquidationHarvest()
    if(is_slave_liquidated)
    {
       s_slave_mc_counter++;
-      if(s_slave_mc_counter >= 20) // 20 siklus konfirmasi berturut-turut (1000ms / 1.0 detik stabil)
+      int req_confirm = m_harvest_in_progress ? 4 : 10; // 200ms jika kelanjutan panen berjenjang, 500ms jika langsung
+      if(s_slave_mc_counter >= req_confirm)
       {
          Print("🚨 [CRITICAL HEDGE SAFETY] Slave account (", m_slave_login,
                ") TERKONFIRMASI HABIS / LIQUIDASI (Equity: $", DoubleToString(m_slave_equity, 2),
                ", Bonus Terbakar Maksimal)! Menutup semua posisi Master untuk panen profit!");
          m_closing_active = true;
          m_closing_lock_until = TimeCurrent() + 6;
+         m_harvest_in_progress = false;
          CloseAllMasterPositions();
          m_closing_active = false;
          m_last_order_time = TimeCurrent();
@@ -1243,7 +1394,8 @@ bool CheckPreNewsAutoFlat()
 
 //+------------------------------------------------------------------+
 //| UNHEDGED ORPHAN WATCHDOG                                         |
-//| Closes any Master position left unhedged by Slave for > 15s      |
+//| Closes ONLY the unhedged Master position(s) left unhedged > 15s  |
+//| NEVER kills already-hedged layers when m_slave_pos_count > 0!    |
 //+------------------------------------------------------------------+
 void CheckUnhedgedOrphanWatchdog()
 {
@@ -1305,10 +1457,13 @@ void CheckUnhedgedOrphanWatchdog()
    else if(GetTickCount64() - s_unhedged_start_tick > (ulong)(m_unhedged_watchdog * 1000))
    {
       Print("🚨 [UNHEDGED WATCHDOG TRIGGERED] Master memiliki ", master_count, " posisi tapi Slave hanya meng-hedge ",
-            m_slave_pos_count, " posisi selama > ", m_unhedged_watchdog, " detik! Menutup posisi unhedged demi keselamatan modal!");
+            m_slave_pos_count, " posisi selama > ", m_unhedged_watchdog,
+            " detik! Menutup HANYA posisi Master yang tidak punya pasangan (Orphan) demi melindungi layer lain!");
       m_closing_active = true;
       m_closing_lock_until = TimeCurrent() + 6;
-      CloseAllMasterPositions();
+      if(m_slave_balance <= 50.0 || m_slave_equity <= 650.0)
+         m_harvest_in_progress = true; // Kunci buka layer baru jika unhedged terjadi karena Slave Stop Out parsial
+      CloseUnhedgedMasterPositions();
       m_closing_active = false;
       m_last_order_time = TimeCurrent();
       s_unhedged_start_tick = 0;
@@ -1318,10 +1473,35 @@ void CheckUnhedgedOrphanWatchdog()
          SendTelegramMessage("🚨 <b>[UNHEDGED WATCHDOG TRIGGERED]</b>\n" +
                              "────────────────────────────\n" +
                              "⚠️ Ditemukan posisi Master yang tidak di-hedge oleh Slave selama > " + IntegerToString(m_unhedged_watchdog) + " detik.\n" +
-                             "🛡️ <b>Posisi Master ditutup otomatis demi keselamatan modal!</b>\n" +
+                             "🛡️ <b>Hanya tiket Master yang unhedged ditutup otomatis (layer lain tetap aman ter-hedge)!</b>\n" +
                              "⏰ <i>" + TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS) + "</i>");
       }
    }
+}
+
+//+------------------------------------------------------------------+
+//| ROLLOVER & MARKET OPEN GUARD (23:50 - 01:15 Server Time)         |
+//| Mencegah buka order & close TP di detik awal market buka (01:00) |
+//| di mana harga loncat/gap antar broker (mis. gap $5.77 di 01:00:00)|
+//+------------------------------------------------------------------+
+bool IsRolloverOrMarketOpenWindow()
+{
+   MqlDateTime dt_srv;
+   TimeToStruct(TimeCurrent(), dt_srv);
+   int mins_of_day = dt_srv.hour * 60 + dt_srv.min;
+   // Jeda Rollover Malam (23:50 - 23:59) dan Pembukaan Market Pagi (00:00 - 01:14 Server Time):
+   if(mins_of_day >= (23 * 60 + 50) || mins_of_day < (1 * 60 + 15))
+   {
+      static datetime s_last_rollover_log = 0;
+      if(TimeCurrent() - s_last_rollover_log >= 60)
+      {
+         Print("🛡️ [ROLLOVER & MARKET OPEN SHIELD] Jam Server ", TimeToString(TimeCurrent(), TIME_MINUTES),
+               " berada di zona rawan Rollover/Market Open (23:50 - 01:15). Menahan eksekusi untuk mencegah gap & slippage buta!");
+         s_last_rollover_log = TimeCurrent();
+      }
+      return true;
+   }
+   return false;
 }
 
 //+------------------------------------------------------------------+
@@ -1518,8 +1698,21 @@ void ManageGrid()
       return; // Tahan sampai Slave 100% simetris meng-hedge seluruh layer Master!
    }
 
-   if(total_positions > 0 && m_slave_pos_count >= ea_positions && effective_basket_tp > 0 && combined_net_profit >= effective_basket_tp)
+   // Reset m_harvest_in_progress jika kedua akun sudah 100% bersih (0 posisi):
+   if(total_positions == 0 && m_slave_pos_count == 0 && m_harvest_in_progress)
    {
+      m_harvest_in_progress = false;
+   }
+
+   if(!m_harvest_in_progress && total_positions > 0 && m_slave_pos_count >= ea_positions && effective_basket_tp > 0 && combined_net_profit >= effective_basket_tp)
+   {
+      // 0. ROLLOVER & MARKET OPEN SHIELD:
+      if(IsRolloverOrMarketOpenWindow())
+      {
+         s_tp_confirm_counter = 0;
+         return;
+      }
+
       // 1. DUAL SPREAD-LOCK PROTECTION:
       // Tahan eksekusi TP jika spread Master ATAU Slave sedang mekar (misal saat FOMC/CPI spike 200-500 poin).
       if(!IsSpreadAcceptable())
@@ -1647,7 +1840,10 @@ void ManageGrid()
    if(TimeCurrent() < m_closing_lock_until) return;
    if(TimeCurrent() - m_last_order_time < 10) return;
 
-   // --- BIG NEWS & SPREAD VOLATILITY SHIELD ---
+   // --- BIG NEWS, ROLLOVER & SPREAD VOLATILITY SHIELD ---
+   // 0. Rollover & Market Open Guard (23:50 - 01:15 Server Time): Cegah gap $5.77 saat pembukaan market 01:00!
+   if(IsRolloverOrMarketOpenWindow()) return;
+
    // 1. Spread-Lock Guard: Dilarang buka order baru jika spread sedang mekar liar
    if(!IsSpreadAcceptable()) return;
 
@@ -1839,6 +2035,7 @@ void CloseAllMasterPositions()
          m_rapid_close_counter = 0;
       }
       m_cycle_start_time = 0; // Reset waktu siklus setelah seluruh posisi ditutup
+      m_harvest_in_progress = false;
    }
 }
 

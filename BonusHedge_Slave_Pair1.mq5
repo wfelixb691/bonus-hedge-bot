@@ -1296,33 +1296,52 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
    // Deteksi DEAL_ADD di mana alasan penutupan adalah DEAL_REASON_SO (Stop Out)
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD && trans.deal > 0)
    {
-      long deal_entry  = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
-      long deal_reason = HistoryDealGetInteger(trans.deal, DEAL_REASON);
-      long deal_magic  = HistoryDealGetInteger(trans.deal, DEAL_MAGIC);
+      // WAJIB select deal di history cache MQL5 terlebih dahulu sebelum membaca properti deal!
+      if(!HistoryDealSelect(trans.deal))
+      {
+         HistorySelect(TimeCurrent() - 86400, TimeCurrent() + 3600);
+         HistoryDealSelect(trans.deal);
+      }
+
+      long   deal_entry  = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
+      long   deal_reason = HistoryDealGetInteger(trans.deal, DEAL_REASON);
+      long   deal_magic  = HistoryDealGetInteger(trans.deal, DEAL_MAGIC);
+      ulong  deal_pos_id = (trans.position > 0) ? trans.position : (ulong)HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
+      string deal_cmt    = HistoryDealGetString(trans.deal, DEAL_COMMENT);
+      string cmt_low     = deal_cmt;
+      StringToLower(cmt_low);
+
+      bool is_so_reason = (deal_reason == DEAL_REASON_SO
+                           || StringFind(cmt_low, "so") == 0
+                           || StringFind(cmt_low, "[so") >= 0
+                           || StringFind(cmt_low, "stop out") >= 0);
 
       // Jika ada tiket hedge Slave yang ditutup paksa oleh broker (Stop Out / Margin Call):
-      if(deal_entry == DEAL_ENTRY_OUT && deal_reason == DEAL_REASON_SO)
+      if((deal_entry == DEAL_ENTRY_OUT || deal_entry == DEAL_ENTRY_INOUT) && is_so_reason)
       {
          if(deal_magic == (long)m_magic || deal_magic == 0)
          {
-            ulong target_m_ticket = GetMasterTicketForSlavePosition(trans.position);
+            ulong target_m_ticket = GetMasterTicketForSlavePosition(deal_pos_id);
 
             // Hitung sisa posisi hedge Slave yang masih aktif di pasar
             int remaining_slave_pos = 0;
             for(int s = PositionsTotal() - 1; s >= 0; s--)
             {
                ulong st = PositionGetTicket(s);
-               if(st > 0 && st != trans.position && IsSlaveHedgePosition(st))
+               if(st > 0 && st != deal_pos_id && IsSlaveHedgePosition(st))
                   remaining_slave_pos++;
             }
 
             double my_equity = AccountInfoDouble(ACCOUNT_EQUITY);
 
+            // ZERO-LATENCY TELEMETRY SYNC: Langsung pancarkan posisi terbaru ke Master!
+            BroadcastSlaveState();
+
             // JIKA MASIH ADA SISA LAYER DAN EQUITY MASIH ADA (> $25):
             // Lakukan Panen Berjenjang (Layer-by-Layer Harvest) agar sisa bonus terbakar habis ke layer berikutnya!
             if(remaining_slave_pos > 0 && my_equity > 25.0 && target_m_ticket > 0)
             {
-               Print("🎯⚡ [PARTIAL STOP OUT DETECTED] Tiket Slave #", trans.position,
+               Print("🎯⚡ [PARTIAL STOP OUT DETECTED] Tiket Slave #", deal_pos_id,
                      " (Deal #", trans.deal, ") TER-STOP OUT BROKER! Mengirim sinyal panen Layer Master #", 
                      target_m_ticket, " (Sisa ", remaining_slave_pos, " layer hedge aktif, Equity: $", 
                      DoubleToString(my_equity, 2), ")");
@@ -1342,4 +1361,5 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
       }
    }
 }
+
 
