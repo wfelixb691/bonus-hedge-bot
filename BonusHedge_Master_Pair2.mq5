@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.34"
+#property version   "1.35"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -513,7 +513,7 @@ int OnInit()
 
    BroadcastSlaveConfig();
 
-   Print("🟢 [BonusHedge_Master v1.34] Initialized on ", m_symbol, " (Pair ID: ", InpPairID, ", Magic: ", m_magic,
+   Print("🟢 [BonusHedge_Master v1.35] Initialized on ", m_symbol, " (Pair ID: ", InpPairID, ", Magic: ", m_magic,
          ", Ref Balance: $", DoubleToString(ref_bal, 2),
          ", Lot: ", DoubleToString(eff_lot, 2), "L", (InpAutoLotFromBalance ? " [AUTO]" : " [MANUAL]"),
          ", Slave Mult: x", DoubleToString(GetEffectiveSlaveMultiplier(), 2),
@@ -527,7 +527,7 @@ int OnInit()
    // Immediate startup test ping to Telegram
    if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
    {
-      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.34 AKTIF]</b>\n" +
+      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.35 AKTIF]</b>\n" +
                           "👑 Akun Master: <b>" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "</b>\n" +
                           "📌 Pair ID: <b>#" + IntegerToString(InpPairID) + "</b> (Magic: " + IntegerToString(m_magic) + ")\n" +
                           "📊 Symbol: <b>" + m_symbol + "</b> | Base Lot: <b>" + DoubleToString(eff_lot, 2) + "L</b> (" + (InpAutoLotFromBalance ? "Auto Balance" : "Manual") + ")\n" +
@@ -1911,7 +1911,7 @@ void ManageGrid()
          }
       }
 
-      // SAFETY CHECK 3 (SLAVE MARGIN CAPACITY PRE-CHECK v1.34):
+      // SAFETY CHECK 3 (SLAVE MARGIN CAPACITY PRE-CHECK v1.35):
       // Sebelum Master membuka Layer berikutnya, Master WAJIB memvalidasi apakah Slave
       // memiliki Free Margin yang cukup untuk meng-hedge layer baru tersebut!
       // JIKA SLAVE TIDAK CUKUP MARGIN: DILARANG BUKA LAYER BARU! Tahan posisi yang ada (HOLD).
@@ -2421,7 +2421,7 @@ void UpdateDashboard()
 
    string text = "\n" +
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
-      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.34             ║\n" +
+      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.35             ║\n" +
       "  ╠════════════════════════════════════════════════════════════════╣\n" +
       "    Pair Group ID   : #" + IntegerToString(InpPairID) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
       "    Bridge Files    : " + m_master_file + " <-> " + m_slave_file + "\n" +

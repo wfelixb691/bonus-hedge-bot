@@ -1,10 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
-title DUAL-MT5 BONUS HEDGE BOT AUTO-UPDATER v1.34 (MULTIPLIER 1.10)
+title DUAL-MT5 BONUS HEDGE BOT AUTO-UPDATER v1.35 (MULTIPLIER 1.10)
 cd /d "%~dp0"
 
 echo ================================================================
-echo   AUTO-UPDATER ^& MEMORY FLUSHER - BONUS HEDGE BOT MT5 v1.34
+echo   AUTO-UPDATER ^& MEMORY FLUSHER - BONUS HEDGE BOT MT5 v1.35
 echo ================================================================
 echo.
 
@@ -116,10 +116,10 @@ echo.
 :: 4. FLUSH MEMORY, UPDATE CHART PROFILE CACHE (.chr) 1.15 -> 1.10 & RESTART TERMINAL
 echo [5/5] FLUSH MEMORI MT5 ^& MIGRASI CACHE CHART (1.15 -^> 1.10):
 echo Me-restart semua terminal MT5 secara otomatis agar memori RAM 100%% bersih...
-powershell -NoProfile -Command "$paths = Get-Process terminal64 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path -Unique; if($paths) { Stop-Process -Name terminal64 -Force; Start-Sleep -Seconds 3 }; $chrs = @(); if(Test-Path \"$env:APPDATA\MetaQuotes\Terminal\") { $chrs += Get-ChildItem -Path \"$env:APPDATA\MetaQuotes\Terminal\" -Filter '*.chr' -Recurse -ErrorAction SilentlyContinue }; $chrs += Get-ChildItem -Path 'C:\Program Files' -Filter '*.chr' -Recurse -ErrorAction SilentlyContinue; foreach($c in $chrs) { try { $raw = [System.IO.File]::ReadAllText($c.FullName); if($raw -match '1\.15') { $new = $raw -replace 'InpSlaveMultiplier=1\.15','InpSlaveMultiplier=1.10' -replace 'InpLotMultiplier=1\.15','InpLotMultiplier=1.10'; [System.IO.File]::WriteAllText($c.FullName, $new) } } catch {} }; if($paths) { foreach($p in $paths) { Start-Process $p }; Write-Host '>>> [BERHASIL] Semua terminal MT5 telah direstart dan memuat EA v1.34 (Multiplier 1.10) ke RAM!' -ForegroundColor Green } else { Write-Host '[INFO] Cache chart telah di-upgrade ke 1.10. Silakan nyalakan terminal MT5.' -ForegroundColor Yellow }"
+powershell -NoProfile -Command "$paths = Get-Process terminal64 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path -Unique; if($paths) { Stop-Process -Name terminal64 -Force; Start-Sleep -Seconds 3 }; $chrs = @(); if(Test-Path \"$env:APPDATA\MetaQuotes\Terminal\") { $chrs += Get-ChildItem -Path \"$env:APPDATA\MetaQuotes\Terminal\" -Filter '*.chr' -Recurse -ErrorAction SilentlyContinue }; $chrs += Get-ChildItem -Path 'C:\Program Files' -Filter '*.chr' -Recurse -ErrorAction SilentlyContinue; foreach($c in $chrs) { try { $raw = [System.IO.File]::ReadAllText($c.FullName); if($raw -match '1\.15') { $new = $raw -replace 'InpSlaveMultiplier=1\.15','InpSlaveMultiplier=1.10' -replace 'InpLotMultiplier=1\.15','InpLotMultiplier=1.10'; [System.IO.File]::WriteAllText($c.FullName, $new) } } catch {} }; if($paths) { foreach($p in $paths) { Start-Process $p }; Write-Host '>>> [BERHASIL] Semua terminal MT5 telah direstart dan memuat EA v1.35 (Multiplier 1.10) ke RAM!' -ForegroundColor Green } else { Write-Host '[INFO] Cache chart telah di-upgrade ke 1.10. Silakan nyalakan terminal MT5.' -ForegroundColor Yellow }"
 
 echo.
 echo ================================================================
-echo   UPDATE v1.34 (MULTIPLIER 1.10) SELESAI DENGAN SUKSES!
+echo   UPDATE v1.35 (MULTIPLIER 1.10) SELESAI DENGAN SUKSES!
 echo ================================================================
 pause
