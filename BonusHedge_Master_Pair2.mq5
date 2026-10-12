@@ -12,8 +12,8 @@
 
 //--- User-Facing Input Parameters (Clean, Simple & Essential Only)
 input group "=== IDENTITAS PASANGAN TRADING ==="
-input int      InpPairID            = 2;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
-input string   InpClientName        = "Client #2";   // Nama Client / Investor (e.g. Pak Welly)
+input int      InpPairID            = 1;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
+input string   InpClientName        = "Client #1";   // Nama Client / Investor (e.g. Pak Welly)
 
 input group "=== AUTO LOT DARI BALANCE ==="
 input bool     InpAutoLotFromBalance = true;         // Auto-Scale Lot dari Balance ($2k->0.10, $5k->0.20, $10k->0.40)
@@ -180,6 +180,7 @@ void   CheckSlaveTimeout();
 void   CheckNakedExposureAlert();
 bool   IsSpreadAcceptable();
 bool   IsMasterPosition(ulong ticket);
+bool   IsMasterEAPosition(ulong ticket);
 
 //+------------------------------------------------------------------+
 //| Cold-Start / Restart Readiness Gate                              |
@@ -198,17 +199,27 @@ bool IsTerminalAndAccountReady()
    return true;
 }
 
-bool IsMasterPosition(ulong ticket)
+bool IsMasterEAPosition(ulong ticket)
 {
    if(ticket <= 0) return false;
+   if(!PositionSelectByTicket(ticket)) return false;
    string pos_sym = PositionGetString(POSITION_SYMBOL);
    if(StringCompare(pos_sym, m_symbol, false) != 0 && StringCompare(pos_sym, _Symbol, false) != 0)
       return false;
    long magic = PositionGetInteger(POSITION_MAGIC);
-   if(magic == (long)m_magic) return true;
-   // STRICT MULTI-PAIR ISOLATION (v1.27):
-   // Toleransi magic lama hanya berlaku untuk Pair 1. Pair 2 (888102) DILARANG keras menyentuh magic 888101!
-   if(m_pair_id <= 1 && (magic == 888111 || magic == 888101)) return true;
+   if(magic == (long)m_magic || magic == 888111 || magic == 888101 || magic == 888102)
+      return true;
+   return false;
+}
+
+bool IsMasterPosition(ulong ticket)
+{
+   if(IsMasterEAPosition(ticket)) return true;
+   if(ticket <= 0 || !PositionSelectByTicket(ticket)) return false;
+   string pos_sym = PositionGetString(POSITION_SYMBOL);
+   if(StringCompare(pos_sym, m_symbol, false) != 0 && StringCompare(pos_sym, _Symbol, false) != 0)
+      return false;
+   long magic = PositionGetInteger(POSITION_MAGIC);
    if(InpIncludeManualTrades && magic == 0) return true;
    return false;
 }
@@ -1042,9 +1053,7 @@ int CloseUnhedgedMasterPositions()
       for(int i = PositionsTotal() - 1; i >= 0; i--)
       {
          ulong ticket = PositionGetTicket(i);
-         if(ticket > 0
-            && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (m_pair_id <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
+         if(IsMasterEAPosition(ticket))
          {
             if(!IsMasterTicketHedgedBySlave(ticket))
             {
@@ -1066,9 +1075,7 @@ int CloseUnhedgedMasterPositions()
       for(int i = PositionsTotal() - 1; i >= 0; i--)
       {
          ulong ticket = PositionGetTicket(i);
-         if(ticket > 0
-            && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (m_pair_id <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
+         if(IsMasterEAPosition(ticket))
          {
             master_ea++;
          }
@@ -1077,9 +1084,7 @@ int CloseUnhedgedMasterPositions()
       for(int i = PositionsTotal() - 1; i >= 0 && closed_orphans < excess; i--)
       {
          ulong ticket = PositionGetTicket(i);
-         if(ticket > 0
-            && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-            && (PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (m_pair_id <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111)))
+         if(IsMasterEAPosition(ticket))
          {
             if(CloseMasterPositionByTicket(ticket))
                closed_orphans++;
@@ -1115,7 +1120,7 @@ bool CheckSlaveLiquidationHarvest()
       if(ticket > 0 && IsMasterPosition(ticket))
       {
          master_count++;
-         if(PositionGetInteger(POSITION_MAGIC) == (long)m_magic || (m_pair_id <= 1 && PositionGetInteger(POSITION_MAGIC) == 888111))
+         if(IsMasterEAPosition(ticket))
             master_ea_count++;
       }
    }
@@ -1488,12 +1493,8 @@ void CheckUnhedgedOrphanWatchdog()
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
-      // WATCHDOG hanya untuk posisi GRID EA (magic sendiri). Posisi manual
-      // (magic 0) sengaja TIDAK dihedging Slave -> tidak boleh memicu watchdog
-      // menutup seluruh grid hanya karena user buka posisi manual!
-      if(ticket > 0
-         && (StringCompare(PositionGetString(POSITION_SYMBOL), m_symbol, false) == 0 || StringCompare(PositionGetString(POSITION_SYMBOL), _Symbol, false) == 0)
-         && PositionGetInteger(POSITION_MAGIC) == (long)m_magic)
+      // WATCHDOG hanya untuk posisi GRID EA (bukan manual magic 0)
+      if(IsMasterEAPosition(ticket))
       {
          master_count++;
       }
@@ -1722,7 +1723,7 @@ void ManageGrid()
       if(IsMasterPosition(ticket))
       {
          total_positions++;
-         if(PositionGetInteger(POSITION_MAGIC) == (long)m_magic || PositionGetInteger(POSITION_MAGIC) == 888111)
+         if(IsMasterEAPosition(ticket))
             ea_positions++;
          total_profit += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + PositionGetDouble(POSITION_COMMISSION);
          double open_p = PositionGetDouble(POSITION_PRICE_OPEN);
@@ -2721,13 +2722,12 @@ void SendWebTelemetry()
          double p_prof = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
          total_profit += p_prof;
 
-         // Find matching slave position
-         string slave_prefix = (m_pair_id <= 1) ? "CT#" : ("CT" + IntegerToString(m_pair_id) + "#");
-         string expected_comment = slave_prefix + IntegerToString(ticket);
+         // Find matching slave position (matches both CT#<ticket> and CT2#<ticket>)
+         string expected_hash = "#" + IntegerToString(ticket);
          int s_idx = -1;
          for(int s = 0; s < m_slave_pos_count; s++)
          {
-            if(StringFind(m_slave_positions[s].comment, expected_comment) >= 0)
+            if(StringFind(m_slave_positions[s].comment, expected_hash) >= 0 || StringFind(m_slave_positions[s].comment, IntegerToString(ticket)) >= 0)
             {
                s_idx = s;
                break;

@@ -178,7 +178,8 @@ void DetectCommentLoss()
       if(IsSlaveHedgePosition(s_ticket))
       {
          mine++;
-         if(StringFind(PositionGetString(POSITION_COMMENT), m_comment_prefix) >= 0)
+         string p_cmt = PositionGetString(POSITION_COMMENT);
+         if(StringFind(p_cmt, m_comment_prefix) >= 0 || StringFind(p_cmt, "CT#") >= 0 || StringFind(p_cmt, "CT2#") >= 0)
             tagged++;
       }
    }
@@ -210,11 +211,11 @@ bool IsSlaveHedgePosition(ulong ticket)
    // STRICT MULTI-PAIR ISOLATION:
    // Pastikan posisi ini 100% milik Pair ini (Magic Number atau Comment Prefix).
    long pos_magic = PositionGetInteger(POSITION_MAGIC);
-   if(pos_magic == (long)m_magic)
+   if(pos_magic == (long)m_magic || pos_magic == 888991 || pos_magic == 888992)
       return true;
 
    string pos_cmt = PositionGetString(POSITION_COMMENT);
-   if(StringFind(pos_cmt, m_comment_prefix) >= 0)
+   if(StringFind(pos_cmt, m_comment_prefix) >= 0 || StringFind(pos_cmt, "CT#") >= 0 || StringFind(pos_cmt, "CT2#") >= 0)
       return true;
 
    // ROBUST CROSS-REFERENCE CHECK (v1.28):
@@ -230,8 +231,8 @@ bool IsSlaveHedgePosition(ulong ticket)
       }
    }
 
-   // Fallback: jika broker menghapus magic & comment dan hanya ada 1 EA di terminal ini
-   if(m_pair_id <= 1 && pos_magic == 0 && StringFind(pos_cmt, "CT") < 0)
+   // Fallback: jika broker menghapus magic & comment
+   if(pos_magic == 0 && StringFind(pos_cmt, "CT") < 0)
       return true;
 
    return false;
@@ -286,10 +287,10 @@ int OnInit()
       if(IsSlaveHedgePosition(s_ticket))
       {
          string cmt = PositionGetString(POSITION_COMMENT);
-         int pos_ct = StringFind(cmt, m_comment_prefix);
-         if(pos_ct >= 0)
+         int pos_hash = StringFind(cmt, "#");
+         if(pos_hash >= 0)
          {
-            string t_str = StringSubstr(cmt, pos_ct + StringLen(m_comment_prefix));
+            string t_str = StringSubstr(cmt, pos_hash + 1);
             ulong m_t = (ulong)StringToInteger(t_str);
             if(m_t > 0) RecordCycleHedgedMasterTicket(m_t);
          }
@@ -852,14 +853,15 @@ void SyncOpenPositions()
 
       if(!m_comments_lost)
       {
-         // MODE NORMAL: cocokkan per-tiket via tag comment "CT#<master_ticket>"
+         // MODE NORMAL: cocokkan per-tiket via tag comment "CT#<master_ticket>" atau "#<master_ticket>"
+         string hash_ticket = "#" + IntegerToString(m_ticket);
          for(int s = PositionsTotal() - 1; s >= 0; s--)
          {
             ulong s_ticket = PositionGetTicket(s);
             if(IsSlaveHedgePosition(s_ticket))
             {
                  string cmt = PositionGetString(POSITION_COMMENT);
-                 if(cmt == expected_comment || StringFind(cmt, expected_comment) >= 0)
+                 if(cmt == expected_comment || StringFind(cmt, expected_comment) >= 0 || StringFind(cmt, hash_ticket) >= 0)
                  {
                     already_hedged = true;
                     break;
@@ -1040,12 +1042,13 @@ void SyncClosePositions()
    {
       ulong s_ticket = PositionGetTicket(s);
       if(s_ticket <= 0) continue;
-      if(PositionGetInteger(POSITION_MAGIC) != (long)m_magic) continue;
+      if(!IsSlaveHedgePosition(s_ticket)) continue;
 
       string comment = PositionGetString(POSITION_COMMENT);
-      if(StringFind(comment, m_comment_prefix) != 0) continue;
+      int pos_hash = StringFind(comment, "#");
+      if(pos_hash < 0) continue;
 
-      string ticket_str = StringSubstr(comment, StringLen(m_comment_prefix));
+      string ticket_str = StringSubstr(comment, pos_hash + 1);
       ulong  m_ticket   = (ulong)StringToInteger(ticket_str);
       if(m_ticket == 0) continue;
 
@@ -1283,7 +1286,7 @@ void UpdateDashboard(double slave_profit, double combined_net_profit)
    for(int s = PositionsTotal() - 1; s >= 0; s--)
    {
       ulong s_ticket = PositionGetTicket(s);
-      if(s_ticket > 0 && PositionGetInteger(POSITION_MAGIC) == (long)m_magic)
+      if(s_ticket > 0 && IsSlaveHedgePosition(s_ticket))
          slave_pos_count++;
    }
 
@@ -1358,10 +1361,10 @@ ulong GetMasterTicketForSlavePosition(ulong slave_pos_ticket)
          if(d_ticket > 0 && HistoryDealGetInteger(d_ticket, DEAL_ENTRY) == DEAL_ENTRY_IN)
          {
             string cmt = HistoryDealGetString(d_ticket, DEAL_COMMENT);
-            int idx = StringFind(cmt, m_comment_prefix);
+            int idx = StringFind(cmt, "#");
             if(idx >= 0)
             {
-               string t_str = StringSubstr(cmt, idx + StringLen(m_comment_prefix));
+               string t_str = StringSubstr(cmt, idx + 1);
                ulong m_t = (ulong)StringToInteger(t_str);
                if(m_t > 0) return m_t;
             }
@@ -1427,7 +1430,7 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
       // Jika ada tiket hedge Slave yang ditutup paksa oleh broker (Stop Out / Margin Call):
       if((deal_entry == DEAL_ENTRY_OUT || deal_entry == DEAL_ENTRY_INOUT) && is_so_reason)
       {
-         if(deal_magic == (long)m_magic || deal_magic == 0)
+         if(deal_magic == (long)m_magic || deal_magic == 888991 || deal_magic == 888992 || deal_magic == 0)
          {
             ulong target_m_ticket = GetMasterTicketForSlavePosition(deal_pos_id);
 
