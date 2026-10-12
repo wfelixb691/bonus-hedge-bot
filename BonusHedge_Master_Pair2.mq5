@@ -1170,11 +1170,14 @@ bool CheckSlaveLiquidationHarvest()
 
    // 2A. DETEKSI PARTIAL STOP OUT BERJENJANG (LAYER-BY-LAYER HARVEST VIA TELEMETRY):
    // Jika Slave masih punya sisa posisi (m_slave_pos_count > 0), TAPI jumlahnya berkurang (< master_ea_count)
-   // saat Slave sedang di zona margin kritis / saldo kas sudah minus terbakar ke Credit Bonus:
+   // saat Slave sedang mengalami floating loss / tekanan margin (mendukung akun $500 maupun $10,000+):
    // Tutup HANYA layer Master yang pasangannya mati di Slave! Biarkan sisa layer terus membakar sisa bonus!
+   double slave_total_cap = m_slave_balance + m_slave_credit;
    bool is_slave_under_stress = (m_slave_balance <= 50.0
                                  || m_slave_equity <= 650.0
-                                 || (m_slave_margin_level > 0.0 && m_slave_margin_level <= 70.0)
+                                 || (slave_total_cap > 0.0 && m_slave_equity <= slave_total_cap * 0.65)
+                                 || m_slave_profit < -50.0
+                                 || (m_slave_margin_level > 0.0 && m_slave_margin_level <= 120.0)
                                  || m_harvest_in_progress);
    if(m_slave_login > 0 && m_slave_pos_count > 0 && m_slave_pos_count < master_ea_count && is_slave_under_stress)
    {
@@ -1221,10 +1224,10 @@ bool CheckSlaveLiquidationHarvest()
          }
          else
          {
-            // Mode normal: Stop Out pada Gold terjadi saat Margin Level menyentuh 20%-30%
-            // (di mana Equity Slave bisa masih $150-$300 dan Credit B Out baru ditarik broker 30 menit kemudian,
-            // tetapi Balance kas Slave sudah <= $50 / minus, atau m_harvest_in_progress sudah aktif).
-            if(m_slave_equity <= 250.0 || m_slave_balance <= 50.0 || m_harvest_in_progress)
+            // Mode normal: Mendukung akun kecil ($500) maupun akun besar ($5,000 - $20,000+)
+            if(m_slave_equity <= 250.0 || m_slave_balance <= 50.0 || m_harvest_in_progress
+               || (m_slave_credit > 0.0 && m_slave_equity <= m_slave_credit + 150.0)
+               || (slave_total_cap > 0.0 && m_slave_equity <= slave_total_cap * 0.35))
                is_slave_liquidated = true;
          }
       }
@@ -1864,7 +1867,7 @@ void ManageGrid()
       m_harvest_in_progress = false;
    }
 
-   if(!m_harvest_in_progress && total_positions > 0 && m_slave_pos_count >= ea_positions && effective_basket_tp > 0 && combined_net_profit >= effective_basket_tp)
+   if(total_positions > 0 && m_slave_pos_count >= ea_positions && effective_basket_tp > 0 && combined_net_profit >= effective_basket_tp)
    {
       // 0. ROLLOVER & MARKET OPEN SHIELD:
       if(IsRolloverOrMarketOpenWindow())
@@ -2420,6 +2423,19 @@ void CheckIncomingCommands()
          }
          return;
       }
+   }
+
+   // --- PANEN BERJENJANG FALLBACK (JIKA TIKET SPESIFIK BELUM TERBACA DI CACHE DEAL) ---
+   if(cmd == "SLAVE_PARTIAL_SO" && !m_closing_active)
+   {
+      m_harvest_in_progress = true;
+      m_closing_active = true;
+      m_closing_lock_until = TimeCurrent() + 4;
+      int harvested = CloseUnhedgedMasterPositions();
+      m_closing_active = false;
+      m_last_order_time = TimeCurrent();
+      Print("🎯⚡ [PARTIAL SO FALLBACK HARVEST] Menutup ", harvested, " layer Master yang kehilangan pasangan hedge di Slave! Layer lain tetap aktif.");
+      return;
    }
 
    if(cmd == "SLAVE_STOPPED_OUT" && !m_closing_active)

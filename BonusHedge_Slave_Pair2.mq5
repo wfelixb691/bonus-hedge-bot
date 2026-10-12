@@ -1462,18 +1462,27 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
 
             // JIKA MASIH ADA SISA LAYER DAN EQUITY MASIH ADA (> $25):
             // Lakukan Panen Berjenjang (Layer-by-Layer Harvest) agar sisa bonus terbakar habis ke layer berikutnya!
-            if(remaining_slave_pos > 0 && my_equity > 25.0 && target_m_ticket > 0)
+            if(remaining_slave_pos > 0 && my_equity > 25.0)
             {
-               Print("🎯⚡ [PARTIAL STOP OUT DETECTED] Tiket Slave #", deal_pos_id,
-                     " (Deal #", trans.deal, ") TER-STOP OUT BROKER! Mengirim sinyal panen Layer Master #", 
-                     target_m_ticket, " (Sisa ", remaining_slave_pos, " layer hedge aktif, Equity: $", 
-                     DoubleToString(my_equity, 2), ")");
-               
-               SendCommandToMaster("SLAVE_SO_TICKET:" + IntegerToString(target_m_ticket));
+               if(target_m_ticket > 0)
+               {
+                  Print("🎯⚡ [PARTIAL STOP OUT DETECTED] Tiket Slave #", deal_pos_id,
+                        " (Deal #", trans.deal, ") TER-STOP OUT BROKER! Mengirim sinyal panen Layer Master #", 
+                        target_m_ticket, " (Sisa ", remaining_slave_pos, " layer hedge aktif, Equity: $", 
+                        DoubleToString(my_equity, 2), ")");
+                  SendCommandToMaster("SLAVE_SO_TICKET:" + IntegerToString(target_m_ticket));
+               }
+               else
+               {
+                  Print("🎯⚡ [PARTIAL STOP OUT DETECTED] Tiket Slave #", deal_pos_id,
+                        " TER-STOP OUT BROKER! Mengirim sinyal SLAVE_PARTIAL_SO ke Master (Sisa ",
+                        remaining_slave_pos, " layer hedge tetap dipertahankan aktif!).");
+                  SendCommandToMaster("SLAVE_PARTIAL_SO");
+               }
             }
             else
             {
-               // STOP OUT FINAL: Seluruh layer habis atau sisa equity <= $25
+               // STOP OUT FINAL: Seluruh layer habis (remaining_slave_pos == 0) atau sisa equity <= $25
                Print("🛑⚡ [FINAL STOP OUT DETECTED] Seluruh layer Slave telah terbakar habis tuntas (Equity: $",
                      DoubleToString(my_equity, 2), ")! Mengirim sinyal panen final SLAVE_STOPPED_OUT ke Master!");
                
