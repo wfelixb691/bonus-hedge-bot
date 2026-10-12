@@ -12,7 +12,7 @@
 
 //--- User-Facing Input Parameters (Clean, Simple & Essential Only)
 input group "=== IDENTITAS PASANGAN TRADING ==="
-input int      InpPairID            = 1;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
+input int      InpPairID            = 2;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
 
 // CATATAN: Lot Multiplier sekarang otomatis dikontrol terpusat dari Master EA!
 // Anda cukup memilih Pair Group ID di atas. Parameter di bawah hanya fallback jika Master belum online.
@@ -846,8 +846,18 @@ void SyncOpenPositions()
          continue; // Order sedang diproses bursa, tahan agar tidak terjadi order ganda!
       }
 
+      double my_bal  = AccountInfoDouble(ACCOUNT_BALANCE);
+      double eff_mult = m_lot_multiplier;
+      if(my_bal > 100.0 && my_credit > 0.0)
+      {
+         double max_safe_mult = (my_bal + my_credit) / (my_bal + 0.60 * my_credit);
+         if(max_safe_mult < 1.02) max_safe_mult = 1.02;
+         if(eff_mult > max_safe_mult)
+            eff_mult = NormalizeDouble(max_safe_mult, 2);
+      }
+
       bool already_hedged = false;
-      double want_raw     = m_master_positions[m_idx].volume * m_lot_multiplier;
+      double want_raw     = m_master_positions[m_idx].volume * eff_mult;
       double want_lot     = MathRound(want_raw * 100.0) / 100.0;
       want_lot            = MathMax(0.01, MathMin(50.0, want_lot));
 
@@ -879,7 +889,7 @@ void SyncOpenPositions()
          int have_count = 0, need_count = 0;
          for(int mm = 0; mm < m_master_pos_count; mm++)
          {
-            double wlot = MathRound(m_master_positions[mm].volume * m_lot_multiplier * 100.0) / 100.0;
+            double wlot = MathRound(m_master_positions[mm].volume * eff_mult * 100.0) / 100.0;
             wlot = MathMax(0.01, MathMin(50.0, wlot));
             if(MathAbs(wlot - want_lot) < 0.005 && (int)m_master_positions[mm].type == (int)m_master_positions[m_idx].type)
                need_count++;
@@ -973,8 +983,10 @@ void SyncOpenPositions()
             }
             else if(!is_net_err && retcode != TRADE_RETCODE_MARKET_CLOSED && retcode != TRADE_RETCODE_CLIENT_DISABLES_AT && retcode != TRADE_RETCODE_TRADE_DISABLED)
             {
-               Print("🚨 [CRITICAL ACCOUNT FAILURE] Error akun fatal (Code=", retcode, " ", m_trade.ResultComment(), "). Mengirim sinyal CLOSE_ALL ke Master untuk keamanan!");
-               SendCommandToMaster("CLOSE_ALL");
+               // DILARANG KERAS mengirim CLOSE_ALL yang akan membunuh layer-layer lama yang sudah ter-hedge aman!
+               // Cukup tandai m_trade_blocked = true agar Master membekukan penambahan grid baru.
+               m_trade_blocked = true;
+               Print("🛡️ [SLAVE ORDER REJECTED - HOLD EXISTING HEDGE] Gagal buka layer baru (Code=", retcode, " ", m_trade.ResultComment(), "). MENOLAK CLOSE_ALL agar posisi lama yang sudah ter-hedge TIDAK RUGI!");
             }
             else if(is_net_err)
             {

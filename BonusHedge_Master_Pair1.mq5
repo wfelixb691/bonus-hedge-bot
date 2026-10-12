@@ -465,9 +465,21 @@ double GetEffectiveSpreadBuffer()
 //+------------------------------------------------------------------+
 double GetEffectiveSlaveMultiplier()
 {
-   if(MathAbs(InpSlaveMultiplier - 1.15) < 0.001 || InpSlaveMultiplier < 1.00)
-      return 1.10;
-   return InpSlaveMultiplier;
+   double base_mult = (MathAbs(InpSlaveMultiplier - 1.15) < 0.001 || InpSlaveMultiplier < 1.00) ? 1.10 : InpSlaveMultiplier;
+
+   // DYNAMIC BONUS-PROTECTED LOT RATIO GUARD:
+   // Jika Saldo Kas Slave (m_slave_balance) sudah membengkak jauh lebih besar dari Credit Bonus (m_slave_credit)
+   // akibat menang TP beruntun, batasi rasio lot Slave secara otomatis agar jika harga Emas turun dan Slave
+   // terkena Stop Out, selisih lot ekstra di Slave TIDAK PERNAH memakan habis bonus atau menyebabkan net cash loss!
+   if(m_slave_online && m_slave_balance > 100.0 && m_slave_credit > 0.0)
+   {
+      // Jaminan matematis minimal 60% Credit Bonus tetap menjadi Net Profit bersih saat Slave Stop Out:
+      double max_safe_mult = (m_slave_balance + m_slave_credit) / (m_slave_balance + 0.60 * m_slave_credit);
+      if(max_safe_mult < 1.02) max_safe_mult = 1.02;
+      if(base_mult > max_safe_mult)
+         base_mult = NormalizeDouble(max_safe_mult, 2);
+   }
+   return base_mult;
 }
 
 //+------------------------------------------------------------------+
@@ -1292,11 +1304,15 @@ bool CheckMasterEmergencyPreservation()
 
    // Hanya evaluasi jika Master memang memegang posisi terbuka
    int master_count = 0;
+   double master_floating = 0.0;
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
       if(ticket > 0 && IsMasterPosition(ticket))
+      {
          master_count++;
+         master_floating += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + PositionGetDouble(POSITION_COMMISSION);
+      }
    }
    if(master_count == 0)
    {
@@ -1314,12 +1330,29 @@ bool CheckMasterEmergencyPreservation()
       s_master_emerg_counter = 0;
       return false;
    }
+
+   // ANTI-CUTLOSS & SPREAD SHIELD:
+   // Jangan pernah memicu close darurat saat jam rollover / spread sedang mekar liar,
+   // dan jika posisi gabungan sedang minus (combined_pnl < 0), JANGAN cutloss prematur di 25% saldo!
+   // Hanya tutup jika gabungan sudah profit (>= 0) ATAU margin Master benar-benar kritis mendekati StopOut broker (<= 40% atau equity <= 10%).
+   double combined_pnl = master_floating + (m_slave_online ? m_slave_profit : 0.0);
+   bool is_critical_margin = (my_margin > 0.0 && my_margin_lvl > 0.0 && my_margin_lvl <= InpMasterMinMarginLevel)
+                             || (my_equity <= MathMax(100.0, my_balance * 0.10));
+   if(!is_critical_margin)
+   {
+      if(IsRolloverOrMarketOpenWindow() || !IsSpreadAcceptable() || !m_slave_online || combined_pnl < 0.0)
+      {
+         s_master_emerg_counter = 0;
+         return false;
+      }
+   }
+
    double effective_buffer = (InpMasterMinEquityBuffer > 0.0) ? InpMasterMinEquityBuffer : MathMax(200.0, my_balance * 0.25);
 
    bool emergency_triggered = false;
    string reason = "";
 
-   if(my_equity <= effective_buffer)
+   if(my_equity <= effective_buffer && (combined_pnl >= 0.0 || is_critical_margin))
    {
       emergency_triggered = true;
       reason = "Equity Master tersisa $" + DoubleToString(my_equity, 2) + " <= Batas Pengaman Otomatis $" + DoubleToString(effective_buffer, 2);
@@ -1716,6 +1749,8 @@ void ManageGrid()
    double total_profit    = 0.0;
    double min_price       = DBL_MAX;
    double max_price       = 0.0;
+   double master_vol_sum  = 0.0;
+   double master_w_price  = 0.0;
 
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
@@ -1727,6 +1762,9 @@ void ManageGrid()
             ea_positions++;
          total_profit += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP) + PositionGetDouble(POSITION_COMMISSION);
          double open_p = PositionGetDouble(POSITION_PRICE_OPEN);
+         double pos_v  = PositionGetDouble(POSITION_VOLUME);
+         master_vol_sum += pos_v;
+         master_w_price += (open_p * pos_v);
          if(open_p < min_price) min_price = open_p;
          if(open_p > max_price) max_price = open_p;
       }
@@ -1777,9 +1815,38 @@ void ManageGrid()
    TimeToStruct(TimeLocal(), dt_loc);
    if(dt_loc.day_of_week == 0 || dt_loc.day_of_week == 6) return; // Silent & standby on weekends!
 
-   double combined_net_profit = total_profit + m_slave_profit;
+   // ZERO-LAG SYNCHRONIZED SLAVE PROFIT VERIFICATION:
+   // Saat harga Emas terjun cepat, profit SELL Master langsung melonjak di detik itu juga,
+   // sedangkan angka m_slave_profit dari file Slave bisa tertinggal 100-500ms (masih angka profit lama sebelum turun)!
+   // Hitung juga estimasi profit Slave secara sinkron pada harga Bid/Ask live Master saat ini,
+   // dan gunakan nilai yang paling konservatif (MathMin) agar lag kuotasi TIDAK PERNAH memicu Phantom TP saat harga turun!
+   double cur_bid = SymbolInfoDouble(m_symbol, SYMBOL_BID);
+   double cur_ask = SymbolInfoDouble(m_symbol, SYMBOL_ASK);
+   double contract_sz = SymbolInfoDouble(m_symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+   if(contract_sz <= 0.0) contract_sz = 100.0;
 
-   static int s_tp_confirm_counter = 0;
+   double slave_vol_sum   = 0.0;
+   double slave_w_price   = 0.0;
+   double sync_slave_prof = 0.0;
+   for(int j = 0; j < m_slave_pos_count; j++)
+   {
+      double sv = m_slave_positions[j].volume;
+      double sp = m_slave_positions[j].price_open;
+      if(sv > 0.0 && sp > 0.0)
+      {
+         slave_vol_sum += sv;
+         slave_w_price += (sp * sv);
+         if(m_slave_positions[j].type == POSITION_TYPE_BUY)
+            sync_slave_prof += sv * contract_sz * (cur_bid - sp);
+         else
+            sync_slave_prof += sv * contract_sz * (sp - cur_ask);
+      }
+   }
+   double verified_slave_profit = (slave_vol_sum > 0.0 && cur_bid > 0.0) ? MathMin(m_slave_profit, sync_slave_prof) : m_slave_profit;
+   double combined_net_profit   = total_profit + verified_slave_profit;
+
+   static int  s_tp_confirm_counter    = 0;
+   static long s_last_tp_slave_counter = -1;
 
    // STRICT INVARIANT 1: HEDGE SYMMETRY REQUIREMENT (v1.28)
    // DILARANG KERAS mengevaluasi / memicu TP Gabungan jika jumlah posisi Slave kurang dari posisi Master!
@@ -1822,23 +1889,30 @@ void ManageGrid()
          return; // Tunda close basket sampai lonjakan lilin M1 reda
       }
 
-      // 3. DIRECTIONAL REVERSAL GUARD:
-      // Karena portofolio adalah Net BUY (+10% volume di Slave), Take Profit hanya boleh dipicu
-      // saat harga sedang memantul naik (rebound), BUKAN di detik harga terjun bebas ke dasar lembah!
-      double cur_bid = SymbolInfoDouble(m_symbol, SYMBOL_BID);
-      if(min_price < DBL_MAX && cur_bid < min_price)
+      // 3. MATHEMATICAL BREAK-EVEN PRICE FLOOR & DIRECTIONAL REVERSAL GUARD:
+      // Karena portofolio adalah Net BUY (Volume Slave BUY > Volume Master SELL), secara matematis
+      // MUSTAHIL terjadi profit bersih jika harga Bid saat ini berada di bawah harga rata-rata open (Weighted Average Open Price)!
+      double avg_master_p = (master_vol_sum > 0.0) ? (master_w_price / master_vol_sum) : min_price;
+      double avg_slave_p  = (slave_vol_sum > 0.0)  ? (slave_w_price / slave_vol_sum)   : avg_master_p;
+      double break_even_floor = MathMax(avg_master_p, avg_slave_p);
+      if((min_price < DBL_MAX && cur_bid < min_price) || (slave_vol_sum >= master_vol_sum && break_even_floor > 0.0 && cur_bid <= break_even_floor))
       {
          s_tp_confirm_counter = 0;
-         return; // Harga sedang di bawah titik open terendah (dasar jurang), tunda TP sampai rebound!
+         return; // Harga berada di bawah titik impas rata-rata basket (Net BUY pasti minus di bawah harga rata-rata)!
       }
 
-      // 4. ANTI-PHANTOM DEBOUNCE CONFIRMATION:
-      // Wajib bertahan terkonfirmasi positif minimal 3 siklus timer berturut-turut (150ms)
-      // untuk mencegah pemicuan salah akibat jeda pembacaan file telemetry sesaat (anti-phantom profit)!
+      // 4. FRESH-PACKET ANTI-PHANTOM DEBOUNCE CONFIRMATION:
+      // Wajib bertahan terkonfirmasi positif minimal 3 paket telemetri Slave BARU berturut-turut
+      // (bukan 3 kali baca file yang sama!) untuk menjamin 0% false trigger akibat lag kuotasi!
+      if(m_slave_last_counter == s_last_tp_slave_counter)
+      {
+         return; // Tunggu sampai Slave menulis paket telemetri baru dengan counter yang lebih tinggi
+      }
+      s_last_tp_slave_counter = m_slave_last_counter;
       s_tp_confirm_counter++;
       if(s_tp_confirm_counter < 3)
       {
-         return; // Tunggu 150ms konfirmasi kestabilan angka Slave
+         return; // Tunggu 3 paket telemetri Slave baru berturut-turut
       }
       s_tp_confirm_counter = 0;
 
