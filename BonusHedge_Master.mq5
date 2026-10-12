@@ -148,7 +148,9 @@ string         m_news_title             = "";
 bool           m_spread_freeze_logged   = false;
 bool           m_burner_alert_sent      = false;
 bool           m_harvest_in_progress    = false;   // True saat panen berjenjang berlangsung (kunci buka layer baru)
+datetime       m_startup_grace_until    = 0;       // Cold-start / restart protection grace window (120s)
 
+bool   IsTerminalAndAccountReady();
 bool   IsBurnerModeActive();
 void   ReadSlaveState();
 void   CheckIncomingCommands();
@@ -177,6 +179,23 @@ void   CheckSlaveTimeout();
 void   CheckNakedExposureAlert();
 bool   IsSpreadAcceptable();
 bool   IsMasterPosition(ulong ticket);
+
+//+------------------------------------------------------------------+
+//| Cold-Start / Restart Readiness Gate                              |
+//| Returns true ONLY when MT5 is connected to broker & account data |
+//| (login, balance/equity, symbol tick) is fully loaded in RAM.     |
+//+------------------------------------------------------------------+
+bool IsTerminalAndAccountReady()
+{
+   if(!TerminalInfoInteger(TERMINAL_CONNECTED)) return false;
+   if(AccountInfoInteger(ACCOUNT_LOGIN) <= 0)   return false;
+   double bal = AccountInfoDouble(ACCOUNT_BALANCE);
+   double eq  = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(MathAbs(bal) < 0.01 && MathAbs(eq) < 0.01) return false;
+   MqlTick tick;
+   if(!SymbolInfoTick(m_symbol, tick) || tick.bid <= 0.0 || tick.ask <= 0.0) return false;
+   return true;
+}
 
 bool IsMasterPosition(ulong ticket)
 {
@@ -500,6 +519,8 @@ int OnInit()
    m_last_order_close_time = 0;
    m_rapid_close_counter   = 0;
    m_circuit_breaker_until = 0;
+   m_startup_grace_until   = TimeLocal() + 120; // 120s cold-start / restart protection grace period
+   FileDelete(m_cmd_to_master, FILE_COMMON);    // Bersihkan sisa file command basi sebelum restart
 
    // SPREAD BUFFER CONFIGURATION (DYNAMIC LOT-SCALED):
    m_spread_buffer = GetEffectiveSpreadBuffer();
@@ -666,6 +687,15 @@ void DeleteManualCloseButton()
 //+------------------------------------------------------------------+
 void OnTimer()
 {
+   // 0. COLD-START / BROKER CONNECTION GATE:
+   // Saat MT5 baru dinyalakan / di-restart oleh auto-updater, tunggu sampai koneksi ke server
+   // broker selesai dan data akun (Balance/Equity/Tick) termuat utuh di RAM!
+   if(!IsTerminalAndAccountReady())
+   {
+      m_startup_grace_until = TimeLocal() + 120; // Perpanjang masa grace selama belum konek penuh
+      return;
+   }
+
    // 1. Read Slave Telemetry (Two-Way Communication)
    ReadSlaveState();
 
@@ -854,6 +884,14 @@ void ReadSlaveState()
       return;
    }
 
+   // COLD-START ZERO SNAPSHOT SHIELD:
+   // Tolak jika Slave belum login atau masih melaporkan Balance=0, Equity=0, Credit=0 saat baru booting!
+   if(new_login <= 0 || (MathAbs(new_equity) < 0.01 && MathAbs(new_balance) < 0.01 && MathAbs(new_credit) < 0.01))
+   {
+      CheckSlaveTimeout();
+      return;
+   }
+
    // Heartbeat: counter harus maju secara live; nilai sama = writer berhenti menulis / file mati
    if(m_slave_last_counter == -1)
    {
@@ -862,9 +900,17 @@ void ReadSlaveState()
       return;
    }
 
-   if(new_counter <= m_slave_last_counter)
+   if(new_counter == m_slave_last_counter)
    {
       CheckSlaveTimeout();
+      return;
+   }
+
+   // Jika Slave baru di-restart (counter kembali ke angka lebih kecil), resync counter & aktifkan masa grace restart!
+   if(new_counter < m_slave_last_counter && new_counter > 0)
+   {
+      m_slave_last_counter  = new_counter;
+      m_startup_grace_until = TimeLocal() + 120;
       return;
    }
 
@@ -1077,6 +1123,20 @@ bool CheckSlaveLiquidationHarvest()
       return false;
    }
 
+   // 0. COLD-START / RESTART GRACE SHIELD (120 DETIK):
+   // Jika Master baru dinyalakan / di-update saat posisi masih terbuka, tunggu sampai Slave
+   // selesai booting dan melaporkan seluruh posisi hedge yang cocok!
+   if(m_slave_pos_count >= master_ea_count && master_ea_count > 0)
+   {
+      m_startup_grace_until = 0; // Slave sudah sinkron penuh mengunci semua posisi Master!
+   }
+   else if(TimeLocal() < m_startup_grace_until)
+   {
+      s_slave_mc_counter = 0;
+      s_partial_so_counter = 0;
+      return false; // Tahan selama masa grace restart terminal agar tidak salah panen!
+   }
+
    // GENUINE LIQUIDATION HARVEST:
    // 1. ORDER OPENING GRACE PERIOD:
    // DILARANG KERAS memicu panen likuidasi jika posisi Master baru dibuka dalam 15 detik terakhir!
@@ -1218,7 +1278,9 @@ bool CheckSlaveLiquidationHarvest()
 //+------------------------------------------------------------------+
 bool CheckMasterEmergencyPreservation()
 {
-   if(m_closing_active || !InpEnableMasterShield) return false;
+   if(m_closing_active || !InpEnableMasterShield || !IsTerminalAndAccountReady()) return false;
+
+   static int s_master_emerg_counter = 0;
 
    // Hanya evaluasi jika Master memang memegang posisi terbuka
    int master_count = 0;
@@ -1228,13 +1290,22 @@ bool CheckMasterEmergencyPreservation()
       if(ticket > 0 && IsMasterPosition(ticket))
          master_count++;
    }
-   if(master_count == 0) return false;
+   if(master_count == 0)
+   {
+      s_master_emerg_counter = 0;
+      return false;
+   }
 
    double my_equity     = AccountInfoDouble(ACCOUNT_EQUITY);
    double my_margin_lvl = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
    double my_margin     = AccountInfoDouble(ACCOUNT_MARGIN);
 
    double my_balance    = AccountInfoDouble(ACCOUNT_BALANCE);
+   if(my_balance <= 0.01 && my_equity <= 0.01)
+   {
+      s_master_emerg_counter = 0;
+      return false;
+   }
    double effective_buffer = (InpMasterMinEquityBuffer > 0.0) ? InpMasterMinEquityBuffer : MathMax(200.0, my_balance * 0.25);
 
    bool emergency_triggered = false;
@@ -1253,6 +1324,10 @@ bool CheckMasterEmergencyPreservation()
 
    if(emergency_triggered)
    {
+      s_master_emerg_counter++;
+      if(s_master_emerg_counter < 4) return false; // 4 siklus (200ms) konfirmasi stabil
+      s_master_emerg_counter = 0;
+
       Print("🚨 [MASTER EMERGENCY SHIELD TRIGGERED] ", reason,
             "! Menutup serentak Master & Slave agar saldo kas Master TIDAK PERNAH minus dan mengunci profit Slave!");
       
@@ -1283,6 +1358,10 @@ bool CheckMasterEmergencyPreservation()
                              "⏰ <i>" + TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS) + "</i>");
       }
       return true;
+   }
+   else
+   {
+      s_master_emerg_counter = 0;
    }
    return false;
 }
@@ -1422,8 +1501,18 @@ void CheckUnhedgedOrphanWatchdog()
    // 1. Kondisi normal: Master dan Slave seimbang -> RESET TIMER WATCHDOG KE 0! (v1.27 FIX)
    if(master_count == 0 || master_count <= m_slave_pos_count)
    {
+      if(master_count > 0 && m_slave_pos_count >= master_count)
+         m_startup_grace_until = 0; // Keduanya sudah sinkron utuh pasca restart!
       s_unhedged_start_tick = 0;
       if(!m_slave_trade_blocked) m_blocked_alert_sent = false;
+      return;
+   }
+
+   // 1b. COLD-START / RESTART GRACE SHIELD (120 DETIK):
+   // Jangan pernah menjalankan Unhedged Watchdog saat MT5 baru di-restart/update!
+   if(TimeLocal() < m_startup_grace_until)
+   {
+      s_unhedged_start_tick = 0;
       return;
    }
 
@@ -2065,6 +2154,8 @@ bool CloseMasterPositionByTicket(ulong target_ticket)
 //+------------------------------------------------------------------+
 void BroadcastMasterState()
 {
+   if(!IsTerminalAndAccountReady()) return;
+
    int count = 0;
    double total_prof = 0.0;
    ulong  tickets[];
@@ -2099,6 +2190,8 @@ void BroadcastMasterState()
    if(file_handle == INVALID_HANDLE) return;
 
    static long s_broadcast_counter = 0;
+   if(s_broadcast_counter == 0)
+      s_broadcast_counter = (long)TimeLocal() * 100; // Monotonic across terminal restarts!
    s_broadcast_counter++;
    FileWriteLong(file_handle, 0x42484246);         // magic "BHBF"
    FileWriteLong(file_handle, 2);                  // protocol version
@@ -2165,6 +2258,15 @@ void CheckIncomingCommands()
 
    int file_handle = FileOpen(m_cmd_to_master, FILE_READ|FILE_BIN|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE);
    if(file_handle == INVALID_HANDLE) return;
+
+   // Tolak & hapus file command basi (> 10 detik) sisa sebelum restart
+   datetime cmd_mod = (datetime)FileGetInteger(file_handle, FILE_MODIFY_DATE);
+   if(cmd_mod > 0 && (TimeLocal() - cmd_mod > 10))
+   {
+      FileClose(file_handle);
+      FileDelete(m_cmd_to_master, FILE_COMMON);
+      return;
+   }
 
    // Validated read: Magic Header + Sender Login + clen + cmd
    ResetLastError();
@@ -2741,6 +2843,9 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
 {
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
    {
+      if(trans.deal == 0 || !HistoryDealSelect(trans.deal))
+         HistorySelect(TimeCurrent() - 86400, TimeCurrent() + 3600);
+
       long deal_entry  = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
       long deal_reason = HistoryDealGetInteger(trans.deal, DEAL_REASON);
       long deal_magic  = HistoryDealGetInteger(trans.deal, DEAL_MAGIC);
