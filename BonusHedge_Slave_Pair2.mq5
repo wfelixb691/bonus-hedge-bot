@@ -5,14 +5,14 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.36"
+#property version   "1.37"
 #property strict
 
 #include <Trade\Trade.mqh>
 
 //--- User-Facing Input Parameters (Clean, Simple & Essential Only)
 input group "=== IDENTITAS PASANGAN TRADING ==="
-input int      InpPairID            = 2;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
+input int      InpPairID            = 1;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
 
 // CATATAN: Lot Multiplier sekarang otomatis dikontrol terpusat dari Master EA!
 // Anda cukup memilih Pair Group ID di atas. Parameter di bawah hanya fallback jika Master belum online.

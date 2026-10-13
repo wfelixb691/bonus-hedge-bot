@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.36"
+#property version   "1.37"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -363,7 +363,8 @@ double GetEffectiveLot(double ref_bal)
    // Tier $2,000  Modal -> 0.10 lot Master (0.11 lot Slave)
    // Tier $4,000  Modal -> 0.20 lot Master (0.22 lot Slave)
    // Tier $5,000  Modal -> 0.25 lot Master (0.28 lot Slave)
-   // Tier $7,000  Modal -> 0.35 lot Master (0.38 lot Slave)
+   // Tier $6,000  Modal -> 0.30 lot Master (0.33 lot Slave)
+   // Tier $7,000  Modal -> 0.35 lot Master (0.39 lot Slave)
    // Tier $10,000 Modal -> 0.50 lot Master (0.55 lot Slave)
    // Lot TIDAK AKAN bertambah saat saldo naik karena profit!
    double init_cap = GetInitialTotalCapital();
@@ -373,8 +374,10 @@ double GetEffectiveLot(double ref_bal)
       lot = 0.10;
    else if(init_cap <= 4500.0)
       lot = 0.20;
-   else if(init_cap <= 6000.0)
+   else if(init_cap <= 5500.0)
       lot = 0.25;
+   else if(init_cap <= 6500.0)
+      lot = 0.30;
    else if(init_cap <= 8500.0)
       lot = 0.35;
    else if(init_cap <= 12500.0)
@@ -548,7 +551,7 @@ int OnInit()
 
    BroadcastSlaveConfig();
 
-   Print("🟢 [BonusHedge_Master v1.36] Initialized on ", m_symbol, " (Pair ID: ", m_pair_id, ", Magic: ", m_magic,
+   Print("🟢 [BonusHedge_Master v1.37] Initialized on ", m_symbol, " (Pair ID: ", m_pair_id, ", Magic: ", m_magic,
          ", Ref Balance: $", DoubleToString(ref_bal, 2),
          ", Lot: ", DoubleToString(eff_lot, 2), "L", (InpAutoLotFromBalance ? " [AUTO]" : " [MANUAL]"),
          ", Slave Mult: x", DoubleToString(GetEffectiveSlaveMultiplier(), 2),
@@ -562,7 +565,7 @@ int OnInit()
    // Immediate startup test ping to Telegram
    if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
    {
-      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.36 AKTIF]</b>\n" +
+      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.37 AKTIF]</b>\n" +
                           "👑 Akun Master: <b>" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "</b>\n" +
                           "📌 Pair ID: <b>#" + IntegerToString(m_pair_id) + "</b> (Magic: " + IntegerToString(m_magic) + ")\n" +
                           "📊 Symbol: <b>" + m_symbol + "</b> | Base Lot: <b>" + DoubleToString(eff_lot, 2) + "L</b> (" + (InpAutoLotFromBalance ? "Auto Balance" : "Manual") + ")\n" +
@@ -2366,8 +2369,9 @@ void CheckIncomingCommands()
 
    if(!ok || clen <= 0 || clen > 64) return; // partial/invalid: biarkan file, retry next tick
 
-   // Isolation: Jika perintah bukan berasal dari Slave terdaftar akun ini, abaikan!
-   if(cmd_magic == 0x4248434D && m_slave_login > 0 && sender_login != 0 && sender_login != m_slave_login)
+   // Isolation: Jika perintah bukan berasal dari Slave terdaftar akun ini atau Admin Controller (login 999999 / master login), abaikan!
+   long my_login = AccountInfoInteger(ACCOUNT_LOGIN);
+   if(cmd_magic == 0x4248434D && m_slave_login > 0 && sender_login != 0 && sender_login != m_slave_login && sender_login != 999999 && sender_login != my_login)
    {
       return;
    }
@@ -2459,6 +2463,32 @@ void CheckIncomingCommands()
       m_cycle_paused = true;
       CreateResumeButton();
       Print("🛑 [EMERGENCY LOCKDOWN] Bot Master di-PAUSE secara permanen karena Slave mengalami kegagalan/darurat. Selesaikan kendala Slave lalu tekan tombol RESUME.");
+      return;
+   }
+
+   // --- REMOTE TELEGRAM / EXTERNAL INTERACTIVE COMMANDS ---
+   if(cmd == "RESUME")
+   {
+      m_cycle_paused = false;
+      m_harvest_in_progress = false;
+      ObjectDelete(0, "BTN_RESUME_CYCLE");
+      ChartRedraw(0);
+      Print("▶️ [REMOTE ACTION] Perintah RESUME diterima! Bot Master aktif kembali.");
+      return;
+   }
+
+   if(cmd == "PAUSE")
+   {
+      m_cycle_paused = true;
+      CreateResumeButton();
+      Print("⏸️ [REMOTE ACTION] Perintah PAUSE diterima! Bot Master dijeda.");
+      return;
+   }
+
+   if(cmd == "MANUAL_CLOSE" && !m_closing_active)
+   {
+      ExecuteManualCloseAll("Perintah REMOTE MANUAL_CLOSE Diterima");
+      return;
    }
 }
 

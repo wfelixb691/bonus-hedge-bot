@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.36"
+#property version   "1.37"
 #property strict
 
 #include <Trade\Trade.mqh>
