@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.35"
+#property version   "1.36"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -301,7 +301,7 @@ int OnInit()
    m_lot_multiplier = (InpLotMultiplier < 1.00 || MathAbs(InpLotMultiplier - 1.15) < 0.001) ? 1.10 : InpLotMultiplier;
    ReadSlaveConfigFile();
 
-   Print("🟢 [BonusHedge_Slave v1.35] Initialized on ", m_symbol,
+   Print("🟢 [BonusHedge_Slave v1.36] Initialized on ", m_symbol,
          " (Pair ID: #", m_pair_id, ", Magic: ", m_magic, ", Mult: ", DoubleToString(m_lot_multiplier, 2), "x)");
 
    // Set Chart Foreground Text to Bright Yellow for maximum crisp readability
@@ -1314,7 +1314,7 @@ void UpdateDashboard(double slave_profit, double combined_net_profit)
 
    string text = "\n" +
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
-      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - SLAVE LP ENGINE v1.35           ║\n" +
+      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - SLAVE LP ENGINE v1.36           ║\n" +
       "  ╠════════════════════════════════════════════════════════════════╣\n" +
       "    Pair Group ID   : #" + IntegerToString(m_pair_id) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
       "    Bridge Files    : " + m_master_file + " <-> " + m_slave_file + "\n" +

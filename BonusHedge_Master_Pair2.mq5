@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.35"
+#property version   "1.36"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -548,7 +548,7 @@ int OnInit()
 
    BroadcastSlaveConfig();
 
-   Print("🟢 [BonusHedge_Master v1.35] Initialized on ", m_symbol, " (Pair ID: ", m_pair_id, ", Magic: ", m_magic,
+   Print("🟢 [BonusHedge_Master v1.36] Initialized on ", m_symbol, " (Pair ID: ", m_pair_id, ", Magic: ", m_magic,
          ", Ref Balance: $", DoubleToString(ref_bal, 2),
          ", Lot: ", DoubleToString(eff_lot, 2), "L", (InpAutoLotFromBalance ? " [AUTO]" : " [MANUAL]"),
          ", Slave Mult: x", DoubleToString(GetEffectiveSlaveMultiplier(), 2),
@@ -562,7 +562,7 @@ int OnInit()
    // Immediate startup test ping to Telegram
    if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
    {
-      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.35 AKTIF]</b>\n" +
+      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.36 AKTIF]</b>\n" +
                           "👑 Akun Master: <b>" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "</b>\n" +
                           "📌 Pair ID: <b>#" + IntegerToString(m_pair_id) + "</b> (Magic: " + IntegerToString(m_magic) + ")\n" +
                           "📊 Symbol: <b>" + m_symbol + "</b> | Base Lot: <b>" + DoubleToString(eff_lot, 2) + "L</b> (" + (InpAutoLotFromBalance ? "Auto Balance" : "Manual") + ")\n" +
@@ -2605,7 +2605,7 @@ void UpdateDashboard()
 
    string text = "\n" +
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
-      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.35             ║\n" +
+      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.36             ║\n" +
       "  ╠════════════════════════════════════════════════════════════════╣\n" +
       "    Pair Group ID   : #" + IntegerToString(m_pair_id) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
       "    Bridge Files    : " + m_master_file + " <-> " + m_slave_file + "\n" +
