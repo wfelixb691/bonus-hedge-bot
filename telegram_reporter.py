@@ -484,22 +484,42 @@ def format_status_response(m: dict, s: dict, ledger: dict, cfg: dict) -> str:
     icon_net = "🟢" if net_fl >= 0 else "🔴"
     status_str = f"⚡ RUNNING ({m_cnt} Layers)" if m_cnt > 0 else "🟢 STANDBY (Siap Trading)"
 
+    pos_text = ""
+    if m_cnt > 0:
+        for idx, p in enumerate(m.get("positions", []), 1):
+            m_type = p.get('type', 'SELL')
+            p_prof = p.get('profit', 0.0)
+            p_sign = "+$" if p_prof >= 0 else "-$"
+            pos_text += f"\n      └ Layer #{idx}: {m_type} {p.get('volume', 0.0)}L @ {p.get('price_open', 0.0)} ({p_sign}{abs(p_prof):.2f})"
+    else:
+        pos_text = "\n      └ (Flat / 0 Posisi)"
+
+    s_pos_text = ""
+    if s_cnt > 0:
+        for idx, p in enumerate(s.get("positions", []), 1):
+            s_type = p.get('type', 'BUY')
+            p_prof = p.get('profit', 0.0)
+            p_sign = "+$" if p_prof >= 0 else "-$"
+            s_pos_text += f"\n      └ Hedge #{idx}: {s_type} {p.get('volume', 0.0)}L @ {p.get('price_open', 0.0)} ({p_sign}{abs(p_prof):.2f})"
+    else:
+        s_pos_text = "\n      └ (Flat / 0 Hedges)"
+
     msg = f"""🎯 <b>[HASIL GABUNGAN MASTER + SLAVE{client_tag}]</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>NET FLOATING PnL : {icon_net} {sign_net}{abs(net_fl):,.2f}</b>
 💵 <b>TOTAL MODAL KAS  : ${tot_bal:,.2f}</b>
-📈 <b>TOTAL EQUITY LIVE: ${tot_eq:,.2f}</b> (Termasuk Bonus)
+📈 <b>TOTAL EQUITY LIVE: ${tot_eq:,.2f}</b> <i>(Termasuk Bonus)</i>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👑 <b>Master ({m_login} - SELL)</b>:
    • Kas: ${m_bal:,.2f} | Equity: ${m_eq:,.2f}
-   • Floating: ${m_prof:,.2f} ({m_cnt} Posisi)
+   • Floating: ${m_prof:,.2f} ({m_cnt} Posisi){pos_text}
 
 🛡️ <b>Slave ({s_login} - BUY)</b>:
    • Kas: ${s_bal:,.2f} | Bonus Credit: ${s_credit:,.2f}
    • Equity: ${s_eq:,.2f}
-   • Floating: ${s_prof:,.2f} ({s_cnt} Hedges)
+   • Floating: ${s_prof:,.2f} ({s_cnt} Hedges){s_pos_text}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚡ <b>Status Engine</b>: <b>{status_str}</b>
+⚡ <b>Status Engine : {status_str}</b>
 ⏰ <i>{datetime.now().strftime('%d %b %Y, %H:%M:%S')}</i>"""
     return msg
 
