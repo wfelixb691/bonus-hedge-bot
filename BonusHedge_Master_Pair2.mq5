@@ -12,8 +12,8 @@
 
 //--- User-Facing Input Parameters (Clean, Simple & Essential Only)
 input group "=== IDENTITAS PASANGAN TRADING ==="
-input int      InpPairID            = 1;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
-input string   InpClientName        = "Client #1";   // Nama Client / Investor (e.g. Pak Welly)
+input int      InpPairID            = 2;             // Pair Group ID (Default: 2 untuk Pasangan 2)
+input string   InpClientName        = "Client #2";   // Nama Client / Investor (Pair 2)
 
 input group "=== AUTO LOT DARI BALANCE ==="
 input bool     InpAutoLotFromBalance = true;         // Auto-Scale Lot dari Balance ($2k->0.10, $5k->0.20, $10k->0.40)
@@ -82,14 +82,14 @@ input int      InpWebIntervalSec    = 2;             // Telemetry Interval (Seco
 const int      InpTimerMS           = 50;            // Sync Interval in ms
 
 //--- Resolved Runtime Variables (Generated Automatically from InpPairID)
-int            m_pair_id            = 1;
-ulong          m_magic              = 888111;
-string         m_comment_prefix     = "GRID_S";
-string         m_master_file        = "bonus_hedge_master.dat";
-string         m_slave_file         = "bonus_hedge_slave.dat";
-string         m_cmd_to_slave       = "bonus_cmd_to_slave.dat";
-string         m_cmd_to_master      = "bonus_cmd_to_master.dat";
-string         m_deficit_file       = "bonus_hedge_deficit.dat";
+int            m_pair_id            = 2;
+ulong          m_magic              = 888102;
+string         m_comment_prefix     = "GRID2_S";
+string         m_master_file        = "bonus_hedge_master_2.dat";
+string         m_slave_file         = "bonus_hedge_slave_2.dat";
+string         m_cmd_to_slave       = "bonus_cmd_to_slave_2.dat";
+string         m_cmd_to_master      = "bonus_cmd_to_master_2.dat";
+string         m_deficit_file       = "bonus_hedge_deficit_2.dat";
 double         m_cycle_realized_deficit = 0.0;       // v1.38: Realized deficit carryover from partial SO
 
 //--- Global Objects

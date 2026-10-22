@@ -12,7 +12,7 @@
 
 //--- User-Facing Input Parameters (Clean, Simple & Essential Only)
 input group "=== IDENTITAS PASANGAN TRADING ==="
-input int      InpPairID            = 1;             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
+input int      InpPairID            = 2;             // Pair Group ID (Default: 2 untuk Pasangan 2)
 
 // CATATAN: Lot Multiplier sekarang otomatis dikontrol terpusat dari Master EA!
 // Anda cukup memilih Pair Group ID di atas. Parameter di bawah hanya fallback jika Master belum online.
@@ -26,13 +26,13 @@ const int      SLIPPAGE_POINTS      = 50;            // Slippage Points Toleranc
 const double   MAX_SPREAD_POINTS    = 60.0;          // Max Spread Points for Flash Debounce
 
 //--- Resolved Runtime Variables (Generated Automatically from InpPairID)
-int            m_pair_id            = 1;
-ulong          m_magic              = 888991;
-string         m_comment_prefix     = "CT#";
-string         m_master_file        = "bonus_hedge_master.dat";
-string         m_slave_file         = "bonus_hedge_slave.dat";
-string         m_cmd_to_slave       = "bonus_cmd_to_slave.dat";
-string         m_cmd_to_master      = "bonus_cmd_to_master.dat";
+int            m_pair_id            = 2;
+ulong          m_magic              = 888992;
+string         m_comment_prefix     = "CT2#";
+string         m_master_file        = "bonus_hedge_master_2.dat";
+string         m_slave_file         = "bonus_hedge_slave_2.dat";
+string         m_cmd_to_slave       = "bonus_cmd_to_slave_2.dat";
+string         m_cmd_to_master      = "bonus_cmd_to_master_2.dat";
 
 //--- Structure for Master Position
 struct SMasterPos
