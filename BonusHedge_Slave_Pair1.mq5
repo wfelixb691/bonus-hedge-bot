@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.37"
+#property version   "1.38"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -301,7 +301,7 @@ int OnInit()
    m_lot_multiplier = (InpLotMultiplier < 1.00 || MathAbs(InpLotMultiplier - 1.15) < 0.001) ? 1.10 : InpLotMultiplier;
    ReadSlaveConfigFile();
 
-   Print("🟢 [BonusHedge_Slave v1.36] Initialized on ", m_symbol,
+   Print("🟢 [BonusHedge_Slave v1.38] Initialized on ", m_symbol,
          " (Pair ID: #", m_pair_id, ", Magic: ", m_magic, ", Mult: ", DoubleToString(m_lot_multiplier, 2), "x)");
 
    // Set Chart Foreground Text to Bright Yellow for maximum crisp readability
@@ -1454,20 +1454,22 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
             // Lakukan Panen Berjenjang (Layer-by-Layer Harvest) agar sisa bonus terbakar habis ke layer berikutnya!
             if(remaining_slave_pos > 0 && my_equity > 25.0)
             {
+               double slave_deal_loss = MathAbs(HistoryDealGetDouble(trans.deal, DEAL_PROFIT) + HistoryDealGetDouble(trans.deal, DEAL_SWAP));
                if(target_m_ticket > 0)
                {
                   Print("🎯⚡ [PARTIAL STOP OUT DETECTED] Tiket Slave #", deal_pos_id,
                         " (Deal #", trans.deal, ") TER-STOP OUT BROKER! Mengirim sinyal panen Layer Master #", 
-                        target_m_ticket, " (Sisa ", remaining_slave_pos, " layer hedge aktif, Equity: $", 
+                        target_m_ticket, " | Rugi Deal: $", DoubleToString(slave_deal_loss, 2),
+                        " (Sisa ", remaining_slave_pos, " layer hedge aktif, Equity: $", 
                         DoubleToString(my_equity, 2), ")");
-                  SendCommandToMaster("SLAVE_SO_TICKET:" + IntegerToString(target_m_ticket));
+                  SendCommandToMaster("SLAVE_SO_TICKET:" + IntegerToString(target_m_ticket) + ":" + DoubleToString(slave_deal_loss, 2));
                }
                else
                {
                   Print("🎯⚡ [PARTIAL STOP OUT DETECTED] Tiket Slave #", deal_pos_id,
-                        " TER-STOP OUT BROKER! Mengirim sinyal SLAVE_PARTIAL_SO ke Master (Sisa ",
-                        remaining_slave_pos, " layer hedge tetap dipertahankan aktif!).");
-                  SendCommandToMaster("SLAVE_PARTIAL_SO");
+                        " TER-STOP OUT BROKER! Mengirim sinyal SLAVE_PARTIAL_SO ke Master | Rugi Deal: $",
+                        DoubleToString(slave_deal_loss, 2), " (Sisa ", remaining_slave_pos, " layer hedge tetap dipertahankan aktif!).");
+                  SendCommandToMaster("SLAVE_PARTIAL_SO:" + DoubleToString(slave_deal_loss, 2));
                }
             }
             else

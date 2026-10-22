@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.37"
+#property version   "1.38"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -30,6 +30,10 @@ input bool     InpPauseAfterCycle   = false;         // Pause After Cycle (false
 
 input group "=== SLAVE HEDGING CONFIG (DARI MASTER) ==="
 input double   InpSlaveMultiplier   = 1.10;          // Multiplier Lot Slave (1.10 = 1.00 Master -> 1.10 Slave, Pembakaran Bonus Optimal)
+
+input group "=== DYNAMIC DEFICIT RECOVERY (PARTIAL SO OFFSET v1.38) ==="
+input bool     InpEnableDeficitOffset = true;         // Enable Dynamic Deficit Recovery on Rebound TP
+input double   InpManualDeficitOffset = 0.0;          // Manual Deficit Offset ($) jika ingin override (0 = Otomatis)
 
 input group "=== INTERVENSI MANUAL ==="
 input bool     InpCloseAll          = false;         // Intervensi Manual: Tutup SEMUA Posisi Master + Slave Sekarang (default: false)
@@ -85,6 +89,8 @@ string         m_master_file        = "bonus_hedge_master.dat";
 string         m_slave_file         = "bonus_hedge_slave.dat";
 string         m_cmd_to_slave       = "bonus_cmd_to_slave.dat";
 string         m_cmd_to_master      = "bonus_cmd_to_master.dat";
+string         m_deficit_file       = "bonus_hedge_deficit.dat";
+double         m_cycle_realized_deficit = 0.0;       // v1.38: Realized deficit carryover from partial SO
 
 //--- Global Objects
 CTrade         m_trade;
@@ -498,6 +504,117 @@ double EstimateSlaveRequiredMargin(double master_lot)
    return margin_req;
 }
 
+//+------------------------------------------------------------------+
+//| v1.38: Dynamic Cycle Realized Deficit Persistence & Recovery     |
+//+------------------------------------------------------------------+
+void SaveCycleDeficit()
+{
+   int h = FileOpen(m_deficit_file, FILE_WRITE|FILE_BIN|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE);
+   if(h != INVALID_HANDLE)
+   {
+      FileWriteDouble(h, m_cycle_realized_deficit);
+      FileClose(h);
+   }
+}
+
+void LoadCycleDeficit()
+{
+   if(InpManualDeficitOffset > 0.0)
+   {
+      m_cycle_realized_deficit = InpManualDeficitOffset;
+      Print("🛡️ [DEFICIT RECOVERY] Menggunakan Manual Deficit Offset: $", DoubleToString(m_cycle_realized_deficit, 2));
+      return;
+   }
+   int h = FileOpen(m_deficit_file, FILE_READ|FILE_BIN|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE);
+   if(h != INVALID_HANDLE)
+   {
+      m_cycle_realized_deficit = FileReadDouble(h);
+      FileClose(h);
+      if(m_cycle_realized_deficit > 0.0)
+      {
+         Print("🛡️ [DEFICIT RECOVERY LOADED] Terbaca defisit kas aktif dari siklus berjalan: $",
+               DoubleToString(m_cycle_realized_deficit, 2), " -> Ditambahkan ke Target TP!");
+      }
+   }
+}
+
+void ResetCycleDeficit()
+{
+   if(m_cycle_realized_deficit > 0.0)
+   {
+      Print("🔄 [DEFICIT RECOVERY RESET] Siklus tuntas — mereset akumulasi defisit ($",
+            DoubleToString(m_cycle_realized_deficit, 2), " -> $0.00).");
+   }
+   m_cycle_realized_deficit = 0.0;
+   FileDelete(m_deficit_file, FILE_COMMON);
+}
+
+void AutoDetectExistingCycleDeficit()
+{
+   if(!InpEnableDeficitOffset || m_cycle_realized_deficit > 0.0) return;
+   
+   // Auto-scan jika saat ini ada posisi Master aktif di tengah siklus:
+   int ea_pos = 0;
+   datetime oldest_open = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong t = PositionGetTicket(i);
+      if(t > 0 && IsMasterEAPosition(t))
+      {
+         ea_pos++;
+         datetime ot = (datetime)PositionGetInteger(POSITION_TIME);
+         if(oldest_open == 0 || ot < oldest_open) oldest_open = ot;
+      }
+   }
+   
+   if(ea_pos > 0 && oldest_open > 0)
+   {
+      HistorySelect(oldest_open - (86400 * 3), TimeCurrent());
+      double unhedged_deficit = 0.0;
+      int deals = HistoryDealsTotal();
+      for(int d = 0; d < deals; d++)
+      {
+         ulong deal = HistoryDealGetTicket(d);
+         if(deal > 0)
+         {
+            long entry = HistoryDealGetInteger(deal, DEAL_ENTRY);
+            long magic = HistoryDealGetInteger(deal, DEAL_MAGIC);
+            datetime dt = (datetime)HistoryDealGetInteger(deal, DEAL_TIME);
+            
+            // Deal penutupan posisi Master milik EA ini yang terjadi di siklus yang sama:
+            if(entry == DEAL_ENTRY_OUT && (magic == (long)m_magic || magic == 888991 || magic == 888992 || magic == 0))
+            {
+               string sym = HistoryDealGetString(deal, DEAL_SYMBOL);
+               if(StringFind(sym, "XAU") >= 0 || StringFind(sym, "xau") >= 0)
+               {
+                  double prof = HistoryDealGetDouble(deal, DEAL_PROFIT) + HistoryDealGetDouble(deal, DEAL_SWAP);
+                  if(prof > 50.0 && dt >= (oldest_open - 3600)) // Penutupan profit parsial pada rentang waktu siklus ini
+                  {
+                     double mult = (InpSlaveMultiplier > 1.0) ? InpSlaveMultiplier : 1.10;
+                     // Rasio delta asimetris: rugi Slave = mult * prof + spread (~1.12x s/d 1.13x)
+                     double est_deficit = (prof * (mult - 1.0)) + (prof * 0.015);
+                     if(est_deficit > 0.0)
+                     {
+                        unhedged_deficit += est_deficit;
+                        Print("🔍 [AUTO-DETECT DEFICIT] Terdeteksi penutupan panen deal #", deal,
+                              " (Profit: $", DoubleToString(prof, 2), ") -> Estimasi defisit kas: $",
+                              DoubleToString(est_deficit, 2));
+                     }
+                  }
+               }
+            }
+         }
+      }
+      if(unhedged_deficit > 0.0)
+      {
+         m_cycle_realized_deficit = unhedged_deficit;
+         SaveCycleDeficit();
+         Print("✅ [AUTO-DETECT DEFICIT SUCCESS] Berhasil mendeteksi akumulasi defisit aktif: $",
+               DoubleToString(m_cycle_realized_deficit, 2), " -> Target TP dinaikkan otomatis!");
+      }
+   }
+}
+
 void InitPairConfiguration()
 {
    string prog = MQLInfoString(MQL_PROGRAM_NAME);
@@ -511,6 +628,7 @@ void InitPairConfiguration()
    m_slave_file     = "bonus_hedge_slave" + suffix + ".dat";
    m_cmd_to_slave   = "bonus_cmd_to_slave" + suffix + ".dat";
    m_cmd_to_master  = "bonus_cmd_to_master" + suffix + ".dat";
+   m_deficit_file   = "bonus_hedge_deficit" + suffix + ".dat";
 }
 
 //+------------------------------------------------------------------+
@@ -542,6 +660,10 @@ int OnInit()
    // SPREAD BUFFER CONFIGURATION (DYNAMIC LOT-SCALED):
    m_spread_buffer = GetEffectiveSpreadBuffer();
 
+   // v1.38: Load / Auto-Detect Dynamic Deficit Carryover
+   LoadCycleDeficit();
+   AutoDetectExistingCycleDeficit();
+
    m_min_margin_level  = (InpMinMarginLevel > 100.0) ? 100.0 : InpMinMarginLevel;
    m_unhedged_watchdog = (InpUnhedgedWatchdogSec > 0 && InpUnhedgedWatchdogSec < 15) ? 15 : InpUnhedgedWatchdogSec;
 
@@ -551,12 +673,12 @@ int OnInit()
 
    BroadcastSlaveConfig();
 
-   Print("🟢 [BonusHedge_Master v1.37] Initialized on ", m_symbol, " (Pair ID: ", m_pair_id, ", Magic: ", m_magic,
+   Print("🟢 [BonusHedge_Master v1.38] Initialized on ", m_symbol, " (Pair ID: ", m_pair_id, ", Magic: ", m_magic,
          ", Ref Balance: $", DoubleToString(ref_bal, 2),
          ", Lot: ", DoubleToString(eff_lot, 2), "L", (InpAutoLotFromBalance ? " [AUTO]" : " [MANUAL]"),
          ", Slave Mult: x", DoubleToString(GetEffectiveSlaveMultiplier(), 2),
          ", Target TP: $", DoubleToString(base_tp, 2), " (", (InpBasketTPDollars > 0.0 ? "Flat" : (DoubleToString(InpTargetProfitPct, 1) + "%")),
-         " + Buffer $", DoubleToString(m_spread_buffer, 2), ")",
+         " + Buffer $", DoubleToString(m_spread_buffer, 2), (m_cycle_realized_deficit > 0 ? (" + Deficit Recovery $" + DoubleToString(m_cycle_realized_deficit, 2)) : ""), ")",
          ", GridStep: ", DoubleToString(InpGridStepPoints, 0), "pts, AutoLoop: ", (InpPauseAfterCycle ? "OFF" : "ON"), ")");
 
    // Set Chart Foreground Text to Bright Yellow for maximum crisp readability
@@ -565,7 +687,7 @@ int OnInit()
    // Immediate startup test ping to Telegram
    if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
    {
-      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.37 AKTIF]</b>\n" +
+      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.38 AKTIF]</b>\n" +
                           "👑 Akun Master: <b>" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "</b>\n" +
                           "📌 Pair ID: <b>#" + IntegerToString(m_pair_id) + "</b> (Magic: " + IntegerToString(m_magic) + ")\n" +
                           "📊 Symbol: <b>" + m_symbol + "</b> | Base Lot: <b>" + DoubleToString(eff_lot, 2) + "L</b> (" + (InpAutoLotFromBalance ? "Auto Balance" : "Manual") + ")\n" +
@@ -1060,9 +1182,23 @@ int CloseUnhedgedMasterPositions()
          {
             if(!IsMasterTicketHedgedBySlave(ticket))
             {
+               double m_prof_before = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
                if(CloseMasterPositionByTicket(ticket))
                {
                   closed_orphans++;
+                  if(InpEnableDeficitOffset)
+                  {
+                     double mult = (InpSlaveMultiplier > 1.0) ? InpSlaveMultiplier : 1.10;
+                     double est_deficit = (m_prof_before * (mult - 1.0)) + (m_prof_before * 0.015);
+                     if(est_deficit > 0.0)
+                     {
+                        m_cycle_realized_deficit += est_deficit;
+                        SaveCycleDeficit();
+                        Print("🛡️⚡ [DEFICIT OFFSET SAVED] Unhedged Master #", ticket, " ditutup (Profit $",
+                              DoubleToString(m_prof_before, 2), ") -> Defisit: $", DoubleToString(est_deficit, 2),
+                              " | Total Defisit Siklus: $", DoubleToString(m_cycle_realized_deficit, 2));
+                     }
+                  }
                   Print("🎯⚡ [ORPHAN / PARTIAL SO HARVEST] Menutup HANYA tiket Master #", ticket,
                         " yang kehilangan pasangan hedge di Slave! Layer lain yang masih ter-hedge TETAP AMAN.");
                }
@@ -1784,7 +1920,8 @@ void ManageGrid()
    double effective_lot    = GetEffectiveLot(ref_bal);
    double base_tp_amount   = GetBaseTPAmount(ref_bal);
    m_spread_buffer         = GetEffectiveSpreadBuffer();
-   double effective_basket_tp = (base_tp_amount > 0) ? (base_tp_amount + m_spread_buffer) : 0.0;
+   double deficit_offset   = InpEnableDeficitOffset ? m_cycle_realized_deficit : 0.0;
+   double effective_basket_tp = (base_tp_amount > 0) ? (base_tp_amount + m_spread_buffer + deficit_offset) : 0.0;
 
    // --- CHECK COMBINED NET PROFIT (MASTER + SLAVE GABUNGAN PLUS) ---
    // Wajib gabungan Master + Slave terkonfirmasi ONLINE agar 100% meng-cover semua spread dan komisi!
@@ -1852,10 +1989,11 @@ void ManageGrid()
       return; // Tahan sampai Slave 100% simetris meng-hedge seluruh layer Master!
    }
 
-   // Reset m_harvest_in_progress jika kedua akun sudah 100% bersih (0 posisi):
-   if(total_positions == 0 && m_slave_pos_count == 0 && m_harvest_in_progress)
+   // Reset m_harvest_in_progress & Deficit Recovery jika kedua akun sudah 100% bersih (0 posisi):
+   if(total_positions == 0 && m_slave_pos_count == 0)
    {
-      m_harvest_in_progress = false;
+      if(m_harvest_in_progress) m_harvest_in_progress = false;
+      if(m_cycle_realized_deficit > 0.0) ResetCycleDeficit();
    }
 
    if(total_positions > 0 && m_slave_pos_count >= ea_positions && effective_basket_tp > 0 && combined_net_profit >= effective_basket_tp)
@@ -2197,6 +2335,7 @@ void CloseAllMasterPositions()
       }
       m_cycle_start_time = 0; // Reset waktu siklus setelah seluruh posisi ditutup
       m_harvest_in_progress = false;
+      ResetCycleDeficit();
    }
 }
 
@@ -2381,17 +2520,53 @@ void CheckIncomingCommands()
    // --- PANEN BERJENJANG (LAYER-BY-LAYER HARVEST) ---
    if(StringFind(cmd, "SLAVE_SO_TICKET:") == 0 && !m_closing_active)
    {
-      string ticket_str = StringSubstr(cmd, 16);
-      ulong target_ticket = (ulong)StringToInteger(ticket_str);
+      string payload = StringSubstr(cmd, 16);
+      ulong target_ticket = 0;
+      double slave_reported_loss = 0.0;
+      int colon_idx = StringFind(payload, ":");
+      if(colon_idx >= 0)
+      {
+         target_ticket = (ulong)StringToInteger(StringSubstr(payload, 0, colon_idx));
+         slave_reported_loss = StringToDouble(StringSubstr(payload, colon_idx + 1));
+      }
+      else
+      {
+         target_ticket = (ulong)StringToInteger(payload);
+      }
+
       if(target_ticket > 0)
       {
          m_harvest_in_progress = true; // KUNCI: Dilarang buka layer baru selama panen berjenjang!
          m_closing_active = true;
          m_closing_lock_until = TimeCurrent() + 4;
          
+         double m_prof_before = 0.0;
+         if(PositionSelectByTicket(target_ticket))
+         {
+            m_prof_before = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+         }
+
          bool closed = CloseMasterPositionByTicket(target_ticket);
          m_closing_active = false;
          m_last_order_time = TimeCurrent();
+
+         if(closed && InpEnableDeficitOffset)
+         {
+            double mult = (InpSlaveMultiplier > 1.0) ? InpSlaveMultiplier : 1.10;
+            double s_loss = (slave_reported_loss > 0.0) ? slave_reported_loss : (m_prof_before * mult);
+            double pair_net = m_prof_before - s_loss;
+            if(pair_net < 0.0)
+            {
+               double def = MathAbs(pair_net);
+               m_cycle_realized_deficit += def;
+               SaveCycleDeficit();
+               Print("🛡️⚡ [DEFICIT OFFSET SAVED] Tiket Master #", target_ticket, " panen profit $",
+                     DoubleToString(m_prof_before, 2), " vs Rugi Slave $", DoubleToString(s_loss, 2),
+                     " | Defisit kas: $", DoubleToString(def, 2),
+                     " | Total Akumulasi Defisit Siklus: $", DoubleToString(m_cycle_realized_deficit, 2),
+                     " -> Target TP otomatis dinaikkan!");
+            }
+         }
 
          // Hitung sisa posisi Master
          int remaining_master = 0;
@@ -2418,7 +2593,7 @@ void CheckIncomingCommands()
    }
 
    // --- PANEN BERJENJANG FALLBACK (JIKA TIKET SPESIFIK BELUM TERBACA DI CACHE DEAL) ---
-   if(cmd == "SLAVE_PARTIAL_SO" && !m_closing_active)
+   if((cmd == "SLAVE_PARTIAL_SO" || StringFind(cmd, "SLAVE_PARTIAL_SO:") == 0) && !m_closing_active)
    {
       m_harvest_in_progress = true;
       m_closing_active = true;
@@ -2529,7 +2704,8 @@ void UpdateDashboard()
    double effective_lot = GetEffectiveLot(ref_bal);
    double base_tp       = GetBaseTPAmount(ref_bal);
    m_spread_buffer      = GetEffectiveSpreadBuffer();
-   double eff_target_tp = (base_tp > 0) ? (base_tp + m_spread_buffer) : 0.0;
+   double deficit_display = InpEnableDeficitOffset ? m_cycle_realized_deficit : 0.0;
+   double eff_target_tp = (base_tp > 0) ? (base_tp + m_spread_buffer + deficit_display) : 0.0;
    double comb_profit   = total_profit + (m_slave_online ? m_slave_profit : 0.0);
 
    string slave_info = m_slave_online ?
@@ -2635,7 +2811,7 @@ void UpdateDashboard()
 
    string text = "\n" +
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
-      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.36             ║\n" +
+      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.38             ║\n" +
       "  ╠════════════════════════════════════════════════════════════════╣\n" +
       "    Pair Group ID   : #" + IntegerToString(m_pair_id) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
       "    Bridge Files    : " + m_master_file + " <-> " + m_slave_file + "\n" +
@@ -2647,7 +2823,7 @@ void UpdateDashboard()
       "    Active Layers   : " + IntegerToString(total_positions) + " / " + IntegerToString(InpMaxLayers) + "\n" +
       "    Master Floating : $" + DoubleToString(total_profit, 2) + "\n" +
       "    Net Combined P/L: $" + (comb_profit >= 0 ? "+" : "") + DoubleToString(comb_profit, 2) + "\n" +
-      "    Target Basket TP: $" + DoubleToString(eff_target_tp, 2) + " (" + (InpBasketTPDollars > 0.0 ? ("$" + DoubleToString(InpBasketTPDollars, 2)) : (DoubleToString(InpTargetProfitPct, 1) + "% dari $" + DoubleToString(init_cap, 0) + " = $" + DoubleToString(base_tp, 2))) + " + Buffer $" + DoubleToString(m_spread_buffer, 2) + ")\n" +
+      "    Target Basket TP: $" + DoubleToString(eff_target_tp, 2) + " (" + (InpBasketTPDollars > 0.0 ? ("$" + DoubleToString(InpBasketTPDollars, 2)) : (DoubleToString(InpTargetProfitPct, 1) + "% dari $" + DoubleToString(init_cap, 0) + " = $" + DoubleToString(base_tp, 2))) + " + Buffer $" + DoubleToString(m_spread_buffer, 2) + (m_cycle_realized_deficit > 0 ? (" + Deficit Recovery $" + DoubleToString(m_cycle_realized_deficit, 2)) : "") + ")\n" +
       "    News/Spread     : " + shield_info + "\n" +
       "  ────────────────────────────────────────────────────────────────\n" +
       "    🔗 SLAVE TELEMETRY: " + slave_info + "\n" +
@@ -2867,7 +3043,8 @@ void SendWebTelemetry()
    double ref_bal          = GetReferenceBalance();
    double net_fl           = total_profit + (m_slave_online ? m_slave_profit : 0.0);
    double base_tp_calc     = GetBaseTPAmount(ref_bal);
-   double eff_telemetry_tp = (base_tp_calc > 0) ? (base_tp_calc + m_spread_buffer) : 0.0;
+   double deficit_rec      = InpEnableDeficitOffset ? m_cycle_realized_deficit : 0.0;
+   double eff_telemetry_tp = (base_tp_calc > 0) ? (base_tp_calc + m_spread_buffer + deficit_rec) : 0.0;
 
    long cur_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
    string shield_status = "NORMAL";

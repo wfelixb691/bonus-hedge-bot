@@ -44,8 +44,8 @@ if "%COMPILER%"=="" (
 echo [OK] Compiler ditemukan: "%COMPILER%"
 echo.
 
-:: 2. Compile Master EA
-echo [1/2] Meng-compile BonusHedge_Master.mq5...
+:: 2. Compile Master EAs
+echo [1/6] Meng-compile BonusHedge_Master.mq5...
 "%COMPILER%" /compile:"%~dp0BonusHedge_Master.mq5" /log:"%~dp0compile_master.log"
 if exist "%~dp0BonusHedge_Master.ex5" (
     echo       [BERHASIL] BonusHedge_Master.ex5 TERBENTUK!
@@ -54,16 +54,52 @@ if exist "%~dp0BonusHedge_Master.ex5" (
     type "%~dp0compile_master.log"
 )
 
+echo [2/6] Meng-compile BonusHedge_Master_Pair1.mq5...
+"%COMPILER%" /compile:"%~dp0BonusHedge_Master_Pair1.mq5" /log:"%~dp0compile_master_p1.log"
+if exist "%~dp0BonusHedge_Master_Pair1.ex5" (
+    echo       [BERHASIL] BonusHedge_Master_Pair1.ex5 TERBENTUK!
+) else (
+    echo       [GAGAL] Lihat compile_master_p1.log
+    type "%~dp0compile_master_p1.log"
+)
+
+echo [3/6] Meng-compile BonusHedge_Master_Pair2.mq5...
+"%COMPILER%" /compile:"%~dp0BonusHedge_Master_Pair2.mq5" /log:"%~dp0compile_master_p2.log"
+if exist "%~dp0BonusHedge_Master_Pair2.ex5" (
+    echo       [BERHASIL] BonusHedge_Master_Pair2.ex5 TERBENTUK!
+) else (
+    echo       [GAGAL] Lihat compile_master_p2.log
+    type "%~dp0compile_master_p2.log"
+)
+
 echo.
 
-:: 3. Compile Slave EA
-echo [2/2] Meng-compile BonusHedge_Slave.mq5...
+:: 3. Compile Slave EAs
+echo [4/6] Meng-compile BonusHedge_Slave.mq5...
 "%COMPILER%" /compile:"%~dp0BonusHedge_Slave.mq5" /log:"%~dp0compile_slave.log"
 if exist "%~dp0BonusHedge_Slave.ex5" (
     echo       [BERHASIL] BonusHedge_Slave.ex5 TERBENTUK!
 ) else (
     echo       [GAGAL] Lihat compile_slave.log
     type "%~dp0compile_slave.log"
+)
+
+echo [5/6] Meng-compile BonusHedge_Slave_Pair1.mq5...
+"%COMPILER%" /compile:"%~dp0BonusHedge_Slave_Pair1.mq5" /log:"%~dp0compile_slave_p1.log"
+if exist "%~dp0BonusHedge_Slave_Pair1.ex5" (
+    echo       [BERHASIL] BonusHedge_Slave_Pair1.ex5 TERBENTUK!
+) else (
+    echo       [GAGAL] Lihat compile_slave_p1.log
+    type "%~dp0compile_slave_p1.log"
+)
+
+echo [6/6] Meng-compile BonusHedge_Slave_Pair2.mq5...
+"%COMPILER%" /compile:"%~dp0BonusHedge_Slave_Pair2.mq5" /log:"%~dp0compile_slave_p2.log"
+if exist "%~dp0BonusHedge_Slave_Pair2.ex5" (
+    echo       [BERHASIL] BonusHedge_Slave_Pair2.ex5 TERBENTUK!
+) else (
+    echo       [GAGAL] Lihat compile_slave_p2.log
+    type "%~dp0compile_slave_p2.log"
 )
 
 echo.
