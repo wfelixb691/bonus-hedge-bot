@@ -2443,7 +2443,8 @@ void CheckIncomingCommands()
 
    // Tolak & hapus file command basi (> 10 detik) sisa sebelum restart
    datetime cmd_mod = (datetime)FileGetInteger(file_handle, FILE_MODIFY_DATE);
-   if(cmd_mod > 0 && (TimeLocal() - cmd_mod > 10))
+   long cmd_age = (long)TimeLocal() - (long)cmd_mod;
+   if(cmd_mod > 0 && MathAbs(cmd_age) > 10)
    {
       FileClose(file_handle);
       FileDelete(m_cmd_to_master, FILE_COMMON);
