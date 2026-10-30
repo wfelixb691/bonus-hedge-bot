@@ -5,22 +5,22 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Advanced Bot EA"
 #property link      "https://www.mql5.com"
-#property version   "1.38"
+#property version   "1.40"
 #property strict
 
 #include <Trade\Trade.mqh>
 
 //--- User-Facing Input Parameters (Clean, Simple & Essential Only)
 input group "=== IDENTITAS PASANGAN TRADING ==="
-input int      InpPairID            = 2;             // Pair Group ID (Default: 2 untuk Pasangan 2)
-input string   InpClientName        = "Client #2";   // Nama Client / Investor (Pair 2)
+input int      InpPairID            = 2;             // Pair Group ID (Default: 2 untuk Pasangan 2)             // Pair Group ID (1 = Pasangan 1, 2 = Pasangan 2, 3 = Pasangan 3, dst)
+input string   InpClientName        = "Client #2";   // Nama Client / Investor (Pair 2)   // Nama Client / Investor (e.g. Pak Welly)
 
 input group "=== AUTO LOT DARI BALANCE ==="
 input bool     InpAutoLotFromBalance = true;         // Auto-Scale Lot dari Balance ($2k->0.10, $5k->0.20, $10k->0.40)
 input double   InpDepositBalanceOverride = 0.0;      // Input Modal ($) jika ingin override saldo (0 = baca saldo otomatis)
 
 input group "=== GRID STRATEGY PARAMETERS ==="
-input double   InpInitialLot        = 1.20;          // Base Lot Manual (Hanya dipakai jika Auto Lot = false)
+input double   InpInitialLot        = 0.10;          // Base Lot Manual (Hanya dipakai jika Auto Lot = false)
 input int      InpMaxLayers         = 3;             // Maximum Grid Layers (Max 3 Positions for Bonus Safety)
 input double   InpGridStepPoints    = 1200.0;        // Grid Step Points (1200.0 = $12.00 on Gold, default 1000-1500)
 input double   InpTargetProfitPct   = 1.2;           // Target Net Basket TP (% Total Modal 2 Akun, default 1.2% ideal)
@@ -37,13 +37,6 @@ input double   InpManualDeficitOffset = 0.0;          // Manual Deficit Offset (
 
 input group "=== INTERVENSI MANUAL ==="
 input bool     InpCloseAll          = false;         // Intervensi Manual: Tutup SEMUA Posisi Master + Slave Sekarang (default: false)
-
-input group "=== AUTO BONUS DRAINER (BURNER MODE) ==="
-input bool     InpEnableBonusBurner = false;         // Auto-Burner: Kuras habis sisa bonus (false = panen tuntas lalu PAUSE)
-input double   InpBurnerMinEquity   = 80.0;          // Min Equity Slave untuk Burner Mode (default: $80)
-input double   InpBurnerLotSize     = 0.10;          // Lot Master saat Burner Mode (Slave x1.10 = 0.11L)
-input double   InpBurnerTargetTP    = 20.0;          // Target Net TP ($) saat Burner Mode (default: $20.0)
-input double   InpBurnerBuffer      = 10.0;          // Spread Buffer ($) saat Burner Mode (default: $10.0)
 
 input group "=== PROTEKSI DARURAT MASTER & ANTI-SALDO MINUS ==="
 input bool     InpEnableMasterShield     = true;   // Master Emergency Shield (Anti-StopOut Broker)
@@ -75,10 +68,9 @@ const bool     InpEnableTelegram    = false;         // Enable Telegram Live Ale
 const string   InpTelegramBotToken  = "8841891391:AAFZX-wQSRd2oXOq5Qw52mWAkq_MPxO72_0";
 const string   InpTelegramChatID    = "164419860";
 const int      InpTelegramIntervalMin = 5;
-input group "=== CLOUD WEB DASHBOARD MONITORING ==="
-input bool     InpEnableWebDashboard= true;          // Enable Cloud Web Dashboard Telemetry
-input string   InpWebDashboardUrl   = "https://thank-theoretical-cutting-inherited.trycloudflare.com/api/telemetry"; // Dashboard Telemetry URL
-input int      InpWebIntervalSec    = 2;             // Telemetry Interval (Seconds)
+const bool     InpEnableWebDashboard= false;         // Cloud Web Dashboard Nonaktif (Zero Thread Latency)
+const string   InpWebDashboardUrl   = "";
+const int      InpWebIntervalSec    = 2;
 const int      InpTimerMS           = 50;            // Sync Interval in ms
 
 //--- Resolved Runtime Variables (Generated Automatically from InpPairID)
@@ -153,12 +145,11 @@ string         m_spike_reason           = "";
 datetime       m_news_pause_until       = 0;
 string         m_news_title             = "";
 bool           m_spread_freeze_logged   = false;
-bool           m_burner_alert_sent      = false;
 bool           m_harvest_in_progress    = false;   // True saat panen berjenjang berlangsung (kunci buka layer baru)
 datetime       m_startup_grace_until    = 0;       // Cold-start / restart protection grace window (120s)
 
 bool   IsTerminalAndAccountReady();
-bool   IsBurnerModeActive();
+void   SendTradeNotification(string text);
 void   ReadSlaveState();
 void   CheckIncomingCommands();
 bool   CheckSlaveLiquidationHarvest();
@@ -213,7 +204,10 @@ bool IsMasterEAPosition(ulong ticket)
    if(StringCompare(pos_sym, m_symbol, false) != 0 && StringCompare(pos_sym, _Symbol, false) != 0)
       return false;
    long magic = PositionGetInteger(POSITION_MAGIC);
-   if(magic == (long)m_magic || magic == 888111 || magic == 888101 || magic == 888102)
+   // STRICT MULTI-PAIR ISOLATION:
+   if(magic == (long)m_magic)
+      return true;
+   if(m_pair_id <= 1 && (magic == 888111 || magic == 888101))
       return true;
    return false;
 }
@@ -276,20 +270,29 @@ double GetInitialTotalCapital()
    }
 
    // Hanya gunakan cache jika sedang ada trade aktif berjalan (agar lot tidak berubah di tengah siklus):
+   double cur_master = AccountInfoDouble(ACCOUNT_BALANCE);
    if(has_active_trades && GlobalVariableCheck(gv_key))
    {
       double saved_cap = GlobalVariableGet(gv_key);
+      if(cur_master < 1800.0 && saved_cap > 2500.0)
+      {
+         // POISONED CACHE AUTO-HEAL: Reset cache warisan lama ($4000) pada akun $1400 ke $2000!
+         saved_cap = 2000.0;
+         GlobalVariableSet(gv_key, 2000.0);
+      }
       if(saved_cap > 0.0) return saved_cap;
    }
 
    // Hitung dari Total Modal Riil Kedua Akun (Mendukung Akun Bonus dengan Credit):
-   double cur_master = AccountInfoDouble(ACCOUNT_BALANCE);
    double eff_slave  = (m_slave_equity > 0.0) ? m_slave_equity : ((m_slave_balance > 0.0) ? m_slave_balance : 0.0);
    double cur_slave  = m_slave_online ? eff_slave : 0.0;
    double total_cap  = cur_master + cur_slave;
    if(total_cap <= 0.0 || cur_slave <= 0.0)
    {
-      total_cap = (cur_master > 0.0) ? (cur_master / 0.45) : 10000.0;
+      if(cur_master < 1800.0)
+         total_cap = 2000.0;
+      else
+         total_cap = (cur_master > 0.0) ? (cur_master / 0.45) : 2000.0;
    }
 
    // Universal Tier Modal Awal (Anti-Compounding):
@@ -300,7 +303,7 @@ double GetInitialTotalCapital()
    // Tier $7,000  -> 0.35 Lot Master (Master ~$3,150 + Slave ~$3,850)
    // Tier $10,000 -> 0.50 Lot Master (Master ~$4,500 + Slave ~$5,500)
    double locked_cap = 2000.0;
-   if(total_cap < 3000.0)
+   if(cur_master < 1800.0 || total_cap < 3000.0)
       locked_cap = 2000.0;
    else if(total_cap < 4500.0)
       locked_cap = 4000.0;
@@ -313,10 +316,14 @@ double GetInitialTotalCapital()
    else
       locked_cap = MathRound(total_cap / 5000.0) * 5000.0;
 
-   if(locked_cap <= 0) locked_cap = 10000.0;
+   if(locked_cap <= 0) locked_cap = 2000.0;
 
-   // HANYA kunci permanen jika Slave sudah online dan melaporkan equity/balance valid:
-   if(m_slave_online && (m_slave_equity > 0.0 || m_slave_balance > 0.0))
+   // Kunci permanen: jika cur_master < 1800 selalu paksa 2000.0
+   if(cur_master < 1800.0)
+   {
+      GlobalVariableSet(gv_key, 2000.0);
+   }
+   else if(m_slave_online && (m_slave_equity > 0.0 || m_slave_balance > 0.0))
    {
       GlobalVariableSet(gv_key, locked_cap);
    }
@@ -324,46 +331,12 @@ double GetInitialTotalCapital()
 }
 
 //+------------------------------------------------------------------+
-//| Helper: Check if Auto Bonus Drainer (Burner Mode) is Active     |
-//+------------------------------------------------------------------+
-bool IsBurnerModeActive()
-{
-   if(!InpEnableBonusBurner) return false;
-   if(!m_slave_online) return false;
-   
-   // Syarat Burner Mode:
-   // 1. Slave memiliki credit bonus aktif (>= $40.0)
-   // 2. Saldo kas riil Slave sudah habis / minus (Balance <= 50.0)
-   // 3. TAPI Equity Slave masih bernilai cukup (>= InpBurnerMinEquity)
-   if(m_slave_credit >= 40.0 && m_slave_balance <= 50.0 && m_slave_equity >= InpBurnerMinEquity)
-   {
-      return true;
-   }
-   return false;
-}
-
-//+------------------------------------------------------------------+
 //| Helper: Fixed Base Lot Sizing from Initial Capital (No Compound) |
 //+------------------------------------------------------------------+
 double GetEffectiveLot(double ref_bal)
 {
-   // CEK AUTO BONUS DRAINER (BURNER MODE):
-   if(IsBurnerModeActive())
-   {
-      double burner_lot = (InpBurnerLotSize > 0.0) ? InpBurnerLotSize : 0.10;
-      double min_l = SymbolInfoDouble(m_symbol, SYMBOL_VOLUME_MIN);
-      double max_l = SymbolInfoDouble(m_symbol, SYMBOL_VOLUME_MAX);
-      double step_l = SymbolInfoDouble(m_symbol, SYMBOL_VOLUME_STEP);
-      if(min_l <= 0) min_l = 0.01;
-      if(max_l <= 0) max_l = 100.0;
-      if(step_l <= 0) step_l = 0.01;
-      burner_lot = MathMax(min_l, MathMin(max_l, burner_lot));
-      burner_lot = MathFloor(burner_lot / step_l) * step_l;
-      return burner_lot;
-   }
-
    if(!InpAutoLotFromBalance)
-      return (InpInitialLot > 0.0) ? InpInitialLot : 0.20;
+      return (InpInitialLot > 0.0) ? InpInitialLot : 0.10;
 
    // FIXED TIER LOT SCALING (Anti-Compounding - Patokan Saldo Awal Terkunci):
    // Tier $2,000  Modal -> 0.10 lot Master (0.11 lot Slave)
@@ -408,11 +381,6 @@ double GetEffectiveLot(double ref_bal)
 //+------------------------------------------------------------------+
 double GetBaseTPAmount(double ref_bal)
 {
-   if(IsBurnerModeActive())
-   {
-      return (InpBurnerTargetTP > 0.0) ? InpBurnerTargetTP : 20.0;
-   }
-
    if(InpBasketTPDollars > 0.0)
       return InpBasketTPDollars;
    if(InpTargetProfitPct > 0.0)
@@ -429,11 +397,6 @@ double GetBaseTPAmount(double ref_bal)
 //+------------------------------------------------------------------+
 double GetEffectiveSpreadBuffer()
 {
-   if(IsBurnerModeActive())
-   {
-      return (InpBurnerBuffer > 0.0) ? InpBurnerBuffer : 10.0;
-   }
-
    // Jika user manual menginput nilai buffer > 0, gunakan input user:
    if(InpSpreadBufferUSD > 0.0)
       return InpSpreadBufferUSD;
@@ -649,6 +612,12 @@ int OnInit()
    m_trade.SetDeviationInPoints(50);
    m_trade.SetTypeFillingBySymbol(m_symbol);
 
+   // IMMEDIATE KILLSWITCH CHECK ON INIT:
+   if(InpCloseAll)
+   {
+      ExecuteManualCloseAll("Parameter InpCloseAll = TRUE pada OnInit (Instant Killswitch)");
+   }
+
    EventSetMillisecondTimer(InpTimerMS);
    m_last_order_open_time  = TimeCurrent();
    m_last_order_close_time = 0;
@@ -667,13 +636,19 @@ int OnInit()
    m_min_margin_level  = (InpMinMarginLevel > 100.0) ? 100.0 : InpMinMarginLevel;
    m_unhedged_watchdog = (InpUnhedgedWatchdogSec > 0 && InpUnhedgedWatchdogSec < 15) ? 15 : InpUnhedgedWatchdogSec;
 
+   // POISONED CACHE PURGE: Jika saldo Master < $1800, paksa reset cache gv_key ke $2000 (Tier $2,000 -> 0.10L)
+   if(AccountInfoDouble(ACCOUNT_BALANCE) < 1800.0)
+   {
+      GlobalVariableSet("BH_INIT_CAP_" + IntegerToString(m_magic), 2000.0);
+   }
+
    double ref_bal = GetReferenceBalance();
    double eff_lot = GetEffectiveLot(ref_bal);
    double base_tp = GetBaseTPAmount(ref_bal);
 
    BroadcastSlaveConfig();
 
-   Print("🟢 [BonusHedge_Master v1.38] Initialized on ", m_symbol, " (Pair ID: ", m_pair_id, ", Magic: ", m_magic,
+   Print("🟢 [BonusHedge_Master v1.40] Initialized on ", m_symbol, " (Pair ID: ", m_pair_id, ", Magic: ", m_magic,
          ", Ref Balance: $", DoubleToString(ref_bal, 2),
          ", Lot: ", DoubleToString(eff_lot, 2), "L", (InpAutoLotFromBalance ? " [AUTO]" : " [MANUAL]"),
          ", Slave Mult: x", DoubleToString(GetEffectiveSlaveMultiplier(), 2),
@@ -687,7 +662,7 @@ int OnInit()
    // Immediate startup test ping to Telegram
    if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
    {
-      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.38 AKTIF]</b>\n" +
+      SendTelegramMessage("🟢 <b>[DUAL-MT5 BONUS HEDGING v1.40 AKTIF]</b>\n" +
                           "👑 Akun Master: <b>" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "</b>\n" +
                           "📌 Pair ID: <b>#" + IntegerToString(m_pair_id) + "</b> (Magic: " + IntegerToString(m_magic) + ")\n" +
                           "📊 Symbol: <b>" + m_symbol + "</b> | Base Lot: <b>" + DoubleToString(eff_lot, 2) + "L</b> (" + (InpAutoLotFromBalance ? "Auto Balance" : "Manual") + ")\n" +
@@ -726,9 +701,13 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
          }
          m_cycle_paused = false;
          m_harvest_in_progress = false;
+         m_circuit_breaker_until = 0;          // RESET Circuit Breaker Lockout!
+         m_circuit_breaker_reason = "";
+         m_rapid_close_counter = 0;             // RESET counter siklus kilat!
+         m_last_order_time = 0;                 // RESET cooldown order agar buka seketika!
          ObjectDelete(0, "BTN_RESUME_CYCLE");
          ChartRedraw(0);
-         Print("▶️ [USER ACTION] Bot di-RESUME oleh user! Siap membuka siklus order baru.");
+         Print("▶️ [USER ACTION] Bot di-RESUME oleh user! Seluruh gembok lockout di-reset nol. Membuka Layer 1 seketika.");
       }
       else if(sparam == "BTN_MANUAL_CLOSE")
       {
@@ -826,6 +805,18 @@ void DeleteManualCloseButton()
 //+------------------------------------------------------------------+
 void OnTimer()
 {
+   // 0A. IMMEDIATE KILLSWITCH (FIRST PRIORITY - ZERO LATENCY):
+   if(InpCloseAll)
+   {
+      static bool s_manual_close_input_done = false;
+      if(!s_manual_close_input_done)
+      {
+         s_manual_close_input_done = true;
+         ExecuteManualCloseAll("Parameter InpCloseAll = TRUE (Top of OnTimer)");
+      }
+      return;
+   }
+
    // 0. COLD-START / BROKER CONNECTION GATE:
    // Saat MT5 baru dinyalakan / di-restart oleh auto-updater, tunggu sampai koneksi ke server
    // broker selesai dan data akun (Balance/Equity/Tick) termuat utuh di RAM!
@@ -848,15 +839,12 @@ void OnTimer()
    // 3. Always Broadcast Master State so Slave is NEVER left with stale data
    BroadcastMasterState();
 
-   // 4. Update On-Screen Dashboard & Cloud Web Telemetry
+   // 4. Update On-Screen Dashboard
    UpdateDashboard();
-   SendWebTelemetry();
 
    // 5. CHECK IF ALGO TRADING IS ALLOWED BY USER IN MT5
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED))
    {
-      Comment("\n  ⚠️ [BonusHedge_Master] ALGO TRADING IS DISABLED IN MT5!\n" +
-              "  Klik tombol 'Algo Trading' di toolbar atas MT5 agar robot bisa bekerja.");
       return;
    }
 
@@ -906,9 +894,12 @@ void ReadSlaveState()
    }
 
    // ANTI-STALE FILE SHIELD: File harus aktif dimodifikasi dalam 15 detik terakhir!
-   // Mencegah Master membaca snapshot hantu/basi dari MT5 sebelum reset atau restart.
+   // Perbaikan Underflow: datetime di MQL5 bertipe unsigned (ulong).
+   // Jika jam antar terminal berselisih milidetik (file_mod > TimeLocal()),
+   // pengurangan tanpa cast long akan underflow ke 18 kuantiliun!
    datetime file_mod = (datetime)FileGetInteger(file_handle, FILE_MODIFY_DATE);
-   if(file_mod > 0 && (TimeLocal() - file_mod > 15))
+   long file_age = (long)TimeLocal() - (long)file_mod;
+   if(file_mod > 0 && MathAbs(file_age) > 15)
    {
       FileClose(file_handle);
       CheckSlaveTimeout();
@@ -1032,25 +1023,29 @@ void ReadSlaveState()
    }
 
    // Heartbeat: counter harus maju secara live; nilai sama = writer berhenti menulis / file mati
-   if(m_slave_last_counter == -1)
-   {
-      // Cold-start baseline: catat counter awal, verifikasi tick berikutnya bahwa angka benar-benar bertambah live!
-      m_slave_last_counter = new_counter;
-      return;
-   }
+   static datetime s_last_counter_change_time = 0;
+   static long     s_prev_slave_counter = -1;
 
-   if(new_counter == m_slave_last_counter)
+   if(new_counter != s_prev_slave_counter)
    {
-      CheckSlaveTimeout();
-      return;
+      s_prev_slave_counter = new_counter;
+      s_last_counter_change_time = TimeLocal();
+   }
+   else
+   {
+      // Counter sama: jika sudah macet > 10 detik, barulah Slave dianggap timeout
+      if(s_last_counter_change_time > 0 && ((long)TimeLocal() - (long)s_last_counter_change_time > 10))
+      {
+         CheckSlaveTimeout();
+         return;
+      }
    }
 
    // Jika Slave baru di-restart (counter kembali ke angka lebih kecil), resync counter & aktifkan masa grace restart!
-   if(new_counter < m_slave_last_counter && new_counter > 0)
+   if(new_counter < m_slave_last_counter && new_counter > 0 && m_slave_last_counter > 0)
    {
       m_slave_last_counter  = new_counter;
       m_startup_grace_until = TimeLocal() + 120;
-      return;
    }
 
    m_slave_last_counter = new_counter;
@@ -1084,7 +1079,8 @@ void ReadSlaveState()
 //+------------------------------------------------------------------+
 void CheckSlaveTimeout()
 {
-   if(m_slave_last_seen > 0 && (TimeLocal() - m_slave_last_seen <= 120))
+   long elapsed = (m_slave_last_seen > 0) ? ((long)TimeLocal() - (long)m_slave_last_seen) : 999999;
+   if(m_slave_last_seen > 0 && elapsed <= 120)
       return; // masih dalam grace: pertahankan snapshot & flag online
    m_slave_online = false;
 }
@@ -1270,12 +1266,38 @@ bool CheckSlaveLiquidationHarvest()
       return false;
    }
 
+   double slave_total_cap = m_slave_balance + m_slave_credit;
+
+   // 2B. Evaluasi Likuidasi Final Broker (Seluruh posisi Slave habis = 0 atau equity habis):
+   bool is_slave_liquidated = false;
+   if(m_slave_login > 0)
+   {
+      // A. Jika sisa Equity Slave benar-benar habis tuntas mendekati nol:
+      if(m_slave_equity <= 15.0)
+      {
+         is_slave_liquidated = true;
+      }
+      // B. Jika seluruh posisi Slave ter-stop out oleh broker (posisi jadi 0 saat Master masih pegang):
+      else if(m_slave_pos_count == 0 && master_count > 0)
+      {
+         // Mode normal: Mendukung akun kecil ($500) maupun akun besar ($5,000 - $20,000+)
+         if(m_slave_equity <= 250.0 || m_slave_balance <= 50.0 || m_harvest_in_progress
+            || (m_slave_credit > 0.0 && m_slave_equity <= m_slave_credit + 150.0)
+            || (slave_total_cap > 0.0 && m_slave_equity <= slave_total_cap * 0.35))
+            is_slave_liquidated = true;
+      }
+   }
+
    // 0. COLD-START / RESTART GRACE SHIELD (120 DETIK):
    // Jika Master baru dinyalakan / di-update saat posisi masih terbuka, tunggu sampai Slave
    // selesai booting dan melaporkan seluruh posisi hedge yang cocok!
    if(m_slave_pos_count >= master_ea_count && master_ea_count > 0)
    {
       m_startup_grace_until = 0; // Slave sudah sinkron penuh mengunci semua posisi Master!
+   }
+   else if(is_slave_liquidated)
+   {
+      m_startup_grace_until = 0; // ZERO-DELAY BYPASS: Slave likuidasi, dilarang menahan panen!
    }
    else if(TimeLocal() < m_startup_grace_until)
    {
@@ -1284,22 +1306,22 @@ bool CheckSlaveLiquidationHarvest()
       return false; // Tahan selama masa grace restart terminal agar tidak salah panen!
    }
 
-   // GENUINE LIQUIDATION HARVEST:
    // 1. ORDER OPENING GRACE PERIOD:
    // DILARANG KERAS memicu panen likuidasi jika posisi Master baru dibuka dalam 15 detik terakhir!
-   // Berikan jeda waktu 15 detik bagi Slave untuk menerima sinyal dan mengeksekusi order hedging ke broker.
    if(m_last_order_open_time > 0 && (TimeCurrent() - m_last_order_open_time < 15))
    {
-      s_slave_mc_counter = 0;
-      s_partial_so_counter = 0;
-      return false; // Jangan memicu panen selama jeda eksekusi order (mencegah flapping 0 detik)
+      if(!is_slave_liquidated)
+      {
+         s_slave_mc_counter = 0;
+         s_partial_so_counter = 0;
+         return false; // Jangan memicu panen selama jeda eksekusi order (mencegah flapping 0 detik)
+      }
    }
 
    // 2A. DETEKSI PARTIAL STOP OUT BERJENJANG (LAYER-BY-LAYER HARVEST VIA TELEMETRY):
    // Jika Slave masih punya sisa posisi (m_slave_pos_count > 0), TAPI jumlahnya berkurang (< master_ea_count)
-   // saat Slave sedang mengalami floating loss / tekanan margin (mendukung akun $500 maupun $10,000+):
+   // saat Slave sedang mengalami floating loss / tekanan margin:
    // Tutup HANYA layer Master yang pasangannya mati di Slave! Biarkan sisa layer terus membakar sisa bonus!
-   double slave_total_cap = m_slave_balance + m_slave_credit;
    bool is_slave_under_stress = (m_slave_balance <= 50.0
                                  || m_slave_equity <= 650.0
                                  || (slave_total_cap > 0.0 && m_slave_equity <= slave_total_cap * 0.65)
@@ -1309,9 +1331,10 @@ bool CheckSlaveLiquidationHarvest()
    if(m_slave_login > 0 && m_slave_pos_count > 0 && m_slave_pos_count < master_ea_count && is_slave_under_stress)
    {
       s_partial_so_counter++;
-      if(s_partial_so_counter >= 4) // 4 siklus (200ms) konfirmasi stabil
+      if(s_partial_so_counter >= 3) // 3 siklus (150ms) konfirmasi stabil
       {
          s_partial_so_counter = 0;
+         m_startup_grace_until = 0;
          m_harvest_in_progress = true; // Kunci buka layer baru selama panen berjenjang berlangsung
          m_closing_active = true;
          m_closing_lock_until = TimeCurrent() + 4;
@@ -1332,38 +1355,10 @@ bool CheckSlaveLiquidationHarvest()
       s_partial_so_counter = 0;
    }
 
-   // 2B. Evaluasi Likuidasi Final Broker (Seluruh posisi Slave habis = 0):
-   bool is_slave_liquidated = false;
-   if(m_slave_login > 0)
-   {
-      // A. Jika sisa Equity Slave benar-benar habis tuntas mendekati nol:
-      if(m_slave_equity <= 15.0)
-      {
-         is_slave_liquidated = true;
-      }
-      // B. Jika seluruh posisi Slave ter-stop out oleh broker (posisi jadi 0 saat Master masih pegang):
-      else if(m_slave_pos_count == 0 && master_count > 0)
-      {
-         // Jika Burner Mode aktif (sisa bonus masih diperjuangkan): HANYA anggap likuidasi jika equity <= $25
-         if(IsBurnerModeActive())
-         {
-            if(m_slave_equity <= 25.0) is_slave_liquidated = true;
-         }
-         else
-         {
-            // Mode normal: Mendukung akun kecil ($500) maupun akun besar ($5,000 - $20,000+)
-            if(m_slave_equity <= 250.0 || m_slave_balance <= 50.0 || m_harvest_in_progress
-               || (m_slave_credit > 0.0 && m_slave_equity <= m_slave_credit + 150.0)
-               || (slave_total_cap > 0.0 && m_slave_equity <= slave_total_cap * 0.35))
-               is_slave_liquidated = true;
-         }
-      }
-   }
-
    if(is_slave_liquidated)
    {
       s_slave_mc_counter++;
-      int req_confirm = m_harvest_in_progress ? 4 : 10; // 200ms jika kelanjutan panen berjenjang, 500ms jika langsung
+      int req_confirm = m_harvest_in_progress ? 2 : 4; // 100-200ms konfirmasi stabil
       if(s_slave_mc_counter >= req_confirm)
       {
          Print("🚨 [CRITICAL HEDGE SAFETY] Slave account (", m_slave_login,
@@ -1377,38 +1372,18 @@ bool CheckSlaveLiquidationHarvest()
          m_last_order_time = TimeCurrent();
          s_slave_mc_counter = 0;
 
-         // HARD LOCKDOWN: Kunci mati bot Master setelah panen Slave MC!
-         // KECUALI jika sisa Equity Slave masih cukup untuk Burner Mode (>= InpBurnerMinEquity):
-         if(InpEnableBonusBurner && m_slave_equity >= InpBurnerMinEquity && m_slave_credit >= 40.0)
+         // HARD LOCKDOWN: Kunci mati bot Master setelah panen Slave MC tuntas!
+         m_cycle_paused = true;
+         CreateResumeButton();
+         Print("🛑 [HARVEST LOCKDOWN] Slave terbakar tuntas & Master berhasil panen profit! Bot Master DIKUNCI PAUSE permanen.");
+         if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
          {
-            m_cycle_paused = false; // JANGAN DIKUNCI! Biarkan langsung masuk Burner Mode
-            Print("🔥 [AUTO-DRAINER AKTIF] Slave terkena stop out tetapi sisa bonus masih $", DoubleToString(m_slave_equity, 2),
-                  "! Memulai Burner Mode (Lot ", DoubleToString(InpBurnerLotSize, 2), "L) untuk menguras sisa bonus ke Master!");
-            if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
-            {
-               SendTelegramMessage("🔥 <b>[AUTO BONUS DRAINER AKTIF]</b>\n" +
-                                   "────────────────────────────\n" +
-                                   "⚠️ Akun Slave #" + IntegerToString(m_slave_login) + " terkena likuidasi parsial broker.\n" +
-                                   "💰 <b>Master berhasil panen & sisa Equity Slave masih $" + DoubleToString(m_slave_equity, 2) + "</b>\n" +
-                                   "🚀 <b>Mengaktifkan Mode Kuras Bonus (Lot " + DoubleToString(InpBurnerLotSize, 2) + "L)</b> otomatis!\n" +
-                                   "🎯 Sisa bonus akan terus ditradingkan sampai habis terserap ke Master.\n" +
-                                   "⏰ <i>" + TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS) + "</i>");
-            }
-         }
-         else
-         {
-            m_cycle_paused = true;
-            CreateResumeButton();
-            Print("🛑 [HARVEST LOCKDOWN] Slave terbakar tuntas & Master berhasil panen profit! Bot Master DIKUNCI PAUSE permanen.");
-            if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
-            {
-               SendTelegramMessage("🛑 <b>[SLAVE TERBAKAR TUNTAS & MASTER PANEN SELESAI]</b>\n" +
-                                   "────────────────────────────\n" +
-                                   "💰 Akun Master #" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + " berhasil menutup posisi dan mengunci profit kas!\n" +
-                                   "🔒 <b>Seluruh bonus kredit telah terkuras habis. Bot di-PAUSE secara permanen.</b>\n" +
-                                   "👉 Silakan reset deposit Slave #" + IntegerToString(m_slave_login) + " lalu tekan tombol <b>RESUME</b> di chart untuk memulai siklus baru.\n" +
-                                   "⏰ <i>" + TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS) + "</i>");
-            }
+            SendTelegramMessage("🛑 <b>[SLAVE TERBAKAR TUNTAS & MASTER PANEN SELESAI]</b>\n" +
+                                "────────────────────────────\n" +
+                                "💰 Akun Master #" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + " berhasil menutup posisi dan mengunci profit kas!\n" +
+                                "🔒 <b>Seluruh bonus kredit telah terkuras habis. Bot di-PAUSE secara permanen.</b>\n" +
+                                "👉 Silakan reset deposit Slave #" + IntegerToString(m_slave_login) + " lalu tekan tombol <b>RESUME</b> di chart untuk memulai siklus baru.\n" +
+                                "⏰ <i>" + TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS) + "</i>");
          }
          return true;
       }
@@ -1941,10 +1916,13 @@ void ManageGrid()
       return;
    }
 
-   // WEEKEND / MARKET CLOSED LOCK:
-   MqlDateTime dt_loc;
-   TimeToStruct(TimeLocal(), dt_loc);
-   if(dt_loc.day_of_week == 0 || dt_loc.day_of_week == 6) return; // Silent & standby on weekends!
+   // WEEKEND / MARKET CLOSED LOCK (BROKER SERVER TIME):
+   datetime srv_time = TimeTradeServer();
+   if(srv_time <= 0) srv_time = TimeCurrent();
+   MqlDateTime dt_srv;
+   TimeToStruct(srv_time, dt_srv);
+   if(dt_srv.day_of_week == 0 || dt_srv.day_of_week == 6) return; // Silent & standby on weekends (Broker Server Time)!
+   if(dt_srv.day_of_week == 5 && (dt_srv.hour * 60 + dt_srv.min >= 23 * 60 + 50)) return; // Friday market close (23:50 broker time)
 
    // ZERO-LAG SYNCHRONIZED SLAVE PROFIT VERIFICATION:
    // Saat harga Emas terjun cepat, profit SELL Master langsung melonjak di detik itu juga,
@@ -2052,6 +2030,8 @@ void ManageGrid()
             " + Slave: $", DoubleToString(m_slave_profit, 2), ") = $", DoubleToString(combined_net_profit, 2),
             " >= Target $", DoubleToString(effective_basket_tp, 2), " (Base $", DoubleToString(base_tp_amount, 2),
             " + Buffer $", DoubleToString(m_spread_buffer, 2), " Ter-Cover!)");
+      SendTradeNotification(StringFormat("🎉 [COMBINED NET TP] Total: $%.2f >= Target $%.2f (Master $%.2f + Slave $%.2f) | Akun #%I64d",
+            combined_net_profit, effective_basket_tp, total_profit, m_slave_profit, AccountInfoInteger(ACCOUNT_LOGIN)));
       m_closing_active = true;
       m_closing_lock_until = TimeCurrent() + 6; // 6-second closing lock
       
@@ -2105,10 +2085,9 @@ void ManageGrid()
    // 2. Do not open if Slave's margin is critical or Slave cannot afford new hedge (Checks Layer 1 & Grid!)
    if(m_slave_online)
    {
-      bool is_burner = IsBurnerModeActive();
-      double min_fund_req = is_burner ? (InpBurnerMinEquity * 0.75) : 100.0;
-      double min_free_req = is_burner ? 40.0 : InpMinFreeMargin;
-      double min_lvl_req  = is_burner ? 50.0 : m_min_margin_level;
+      double min_fund_req = 100.0;
+      double min_free_req = InpMinFreeMargin;
+      double min_lvl_req  = m_min_margin_level;
 
       // Akun Bonus: Balance bisa minus tetapi masih memiliki Equity / Free Margin dari Credit Bonus!
       double eff_slave_fund = (m_slave_equity > 0.0) ? m_slave_equity : m_slave_balance;
@@ -2119,14 +2098,6 @@ void ManageGrid()
       {
          // Slave kehabisan margin/equity (butuh Rebalance/Deposit): JANGAN BUKA ORDER APAPUN!
          return;
-      }
-
-      if(is_burner && !m_burner_alert_sent)
-      {
-         m_burner_alert_sent = true;
-         Print("🔥 [BURNER MODE RUNNING] Slave Balance: $", DoubleToString(m_slave_balance, 2),
-               ", Equity: $", DoubleToString(m_slave_equity, 2), " (Credit $", DoubleToString(m_slave_credit, 2),
-               "). Lot khusus kuras bonus: ", DoubleToString(InpBurnerLotSize, 2), "L");
       }
    }
    else if(!m_slave_online)
@@ -2178,6 +2149,7 @@ void ManageGrid()
       {
          Print("✅ [MASTER OPEN INITIAL] Layer 1: SELL ", effective_lot, "L @ ", tick.bid, " (", comment, ")");
          BroadcastMasterState(); // ZERO-LATENCY BROADCAST: Langsung kirim state ke Slave tanpa menunggu timer 50ms!
+         SendTradeNotification(StringFormat("🟢 [MASTER OPEN] Layer 1: SELL %.2fL @ %.2f (%s) | Akun #%I64d", effective_lot, tick.bid, comment, AccountInfoInteger(ACCOUNT_LOGIN)));
       }
       return;
    }
@@ -2271,6 +2243,7 @@ void ManageGrid()
             Print("✅ [MASTER OPEN NEXT LAYER] Layer ", (total_positions + 1), ": SELL ",
                   effective_lot, "L @ ", tick.bid, " (", comment, ")");
             BroadcastMasterState(); // ZERO-LATENCY BROADCAST: Langsung kirim state ke Slave tanpa jeda!
+            SendTradeNotification(StringFormat("🟢 [MASTER OPEN] Layer %d: SELL %.2fL @ %.2f (%s) | Akun #%I64d", (total_positions + 1), effective_lot, tick.bid, comment, AccountInfoInteger(ACCOUNT_LOGIN)));
          }
       }
    }
@@ -2608,6 +2581,7 @@ void CheckIncomingCommands()
    if(cmd == "SLAVE_STOPPED_OUT" && !m_closing_active)
    {
       Print("🚨⚡ [ZERO-DELAY HARVEST TRIGGERED] Slave #", sender_login, " TER-STOP OUT BROKER! Menutup seketika seluruh posisi Master di milidetik yang sama tanpa jeda!");
+      m_startup_grace_until = 0; // ZERO-DELAY BYPASS!
       m_closing_active = true;
       m_closing_lock_until = TimeCurrent() + 6;
       m_harvest_in_progress = false;
@@ -2621,6 +2595,15 @@ void CheckIncomingCommands()
       m_cycle_paused = true;
       CreateResumeButton();
       Print("🛑 [HARVEST LOCKDOWN] Master berhasil panen profit instan di titik stop out Slave! Bot Master di-PAUSE secara aman.");
+      if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
+      {
+         SendTelegramMessage("🛑 <b>[PANEN STOP OUT SLAVE INSTAN SELESAI]</b>\n" +
+                             "────────────────────────────\n" +
+                             "👑 Akun Master: <b>" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "</b>\n" +
+                             "💰 Master berhasil panen instan (0.0s) di titik stop out Slave #" + IntegerToString(sender_login) + "!\n" +
+                             "🔒 Bot di-PAUSE secara aman. Silakan klik tombol <b>RESUME</b> di chart untuk siklus baru.\n" +
+                             "⏰ <i>" + TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS) + "</i>");
+      }
       return;
    }
 
@@ -2712,8 +2695,22 @@ void UpdateDashboard()
       ("Login: " + IntegerToString(m_slave_login) + " | Free: $" + DoubleToString(m_slave_free_margin, 2) + " (" + DoubleToString(m_slave_margin_level, 1) + "%) | Spread: " + IntegerToString(m_slave_spread) + "pts") :
       "OFFLINE / Not Connected";
 
+   bool term_allowed = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED);
+   bool mql_allowed  = (bool)MQLInfoInteger(MQL_TRADE_ALLOWED);
    string status_str = "⏳ IDLE - Waiting";
-   if(InpCloseAll)
+   if(!term_allowed)
+   {
+      status_str = "⚠️ ALGO TRADING OFF: Klik tombol 'Algo Trading' di toolbar atas MT5!";
+      DeleteManualCloseButton();
+      ObjectDelete(0, "BTN_RESUME_CYCLE");
+   }
+   else if(!mql_allowed)
+   {
+      status_str = "⚠️ IZIN TRADE OFF: Tekan F7 di chart -> Tab Common -> Centang 'Allow Algo Trading'!";
+      DeleteManualCloseButton();
+      ObjectDelete(0, "BTN_RESUME_CYCLE");
+   }
+   else if(InpCloseAll)
    {
       status_str = "🛑 INTERVENSI MANUAL: InpCloseAll=TRUE (Kembalikan ke false di F7)";
       DeleteManualCloseButton();
@@ -2737,12 +2734,6 @@ void UpdateDashboard()
       status_str = "✅ GRID ACTIVE (SYNC 50ms) - Floating: " + (comb_profit >= 0 ? "+$" : "-$") + DoubleToString(MathAbs(comb_profit), 2);
       ObjectDelete(0, "BTN_RESUME_CYCLE");
       CreateManualCloseButton();
-   }
-   else if(IsBurnerModeActive())
-   {
-      status_str = "🔥 BONUS BURNER AKTIF: Menguras Sisa Bonus Slave (Eq: $" + DoubleToString(m_slave_equity, 2) + " | Lot: " + DoubleToString(GetEffectiveLot(0), 2) + "L)";
-      ObjectDelete(0, "BTN_RESUME_CYCLE");
-      DeleteManualCloseButton();
    }
    else if(AccountInfoDouble(ACCOUNT_MARGIN_FREE) < InpMinFreeMargin || (AccountInfoDouble(ACCOUNT_MARGIN_LEVEL) > 0 && AccountInfoDouble(ACCOUNT_MARGIN_LEVEL) < m_min_margin_level))
    {
@@ -2768,13 +2759,13 @@ void UpdateDashboard()
       ObjectDelete(0, "BTN_RESUME_CYCLE");
       DeleteManualCloseButton();
    }
-   else if(m_slave_online && !IsBurnerModeActive() && ((m_slave_equity > 0.0 ? m_slave_equity : m_slave_balance) < 100.0))
+   else if(m_slave_online && ((m_slave_equity > 0.0 ? m_slave_equity : m_slave_balance) < 100.0))
    {
       status_str = "⚠️ PAUSED: Slave Margin/Equity Habis ($" + DoubleToString(m_slave_equity, 2) + ") - Harap Reset/Deposit!";
       ObjectDelete(0, "BTN_RESUME_CYCLE");
       DeleteManualCloseButton();
    }
-   else if(m_slave_online && !IsBurnerModeActive() && (m_slave_free_margin < InpMinFreeMargin || (m_slave_margin_level > 0 && m_slave_margin_level < m_min_margin_level)))
+   else if(m_slave_online && (m_slave_free_margin < InpMinFreeMargin || (m_slave_margin_level > 0 && m_slave_margin_level < m_min_margin_level)))
    {
       status_str = "⚠️ PAUSED: Slave Margin Kritis (Free: $" + DoubleToString(m_slave_free_margin, 2) + ", Lvl: " + DoubleToString(m_slave_margin_level, 1) + "%) - Proteksi Margin Aktif!";
       ObjectDelete(0, "BTN_RESUME_CYCLE");
@@ -2782,7 +2773,7 @@ void UpdateDashboard()
    }
    else if(m_slave_trade_blocked)
    {
-      status_str = "🚫 SLAVE TRADE-BLOCKED: Algo Slave OFF / CB aktif - Grid DITAHAN (proteksi FOMC)";
+      status_str = "🛑 SLAVE TRADE-BLOCKED: Nyalakan 'Algo Trading' di MT5 SLAVE (#" + IntegerToString(m_slave_login) + ") & centang F7 Common!";
       ObjectDelete(0, "BTN_RESUME_CYCLE");
       DeleteManualCloseButton();
    }
@@ -2811,7 +2802,7 @@ void UpdateDashboard()
 
    string text = "\n" +
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
-      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.38             ║\n" +
+      "  ║   ⚡ DUAL-MT5 BONUS HEDGING - MASTER ENGINE v1.40             ║\n" +
       "  ╠════════════════════════════════════════════════════════════════╣\n" +
       "    Pair Group ID   : #" + IntegerToString(m_pair_id) + " (Magic: " + IntegerToString(m_magic) + ")\n" +
       "    Bridge Files    : " + m_master_file + " <-> " + m_slave_file + "\n" +
@@ -2832,6 +2823,7 @@ void UpdateDashboard()
 
    ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);
    Comment(text);
+   ChartRedraw(0);
 
    // Periodic Telegram Snapshot
    if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
@@ -2985,141 +2977,30 @@ double GetRealizedProfit(datetime from_time)
 }
 
 //+------------------------------------------------------------------+
+//| Helper: Send Instant Trade & Harvest Notifications               |
+//+------------------------------------------------------------------+
+void SendTradeNotification(string text)
+{
+   // 1. Mobile MT5 Push Notification (Instant & Zero WebRequest)
+   SendNotification(text);
+
+   // 2. Telegram Alert (jika diaktifkan)
+   if(InpEnableTelegram && StringLen(InpTelegramBotToken) > 0 && StringLen(InpTelegramChatID) > 0)
+   {
+      SendTelegramMessage(text);
+   }
+
+   // 3. Journal Print
+   Print("📢 [TRADE NOTIFICATION] ", text);
+}
+
+//+------------------------------------------------------------------+
 //| Helper: Stream Real-Time JSON Telemetry to Cloud Web API         |
+//| (Dinonaktifkan demi Zero Execution Latency & Anti-Thread Freeze) |
 //+------------------------------------------------------------------+
 void SendWebTelemetry()
 {
-   if(!InpEnableWebDashboard || StringLen(InpWebDashboardUrl) == 0) return;
-   if(TimeLocal() - m_last_web_time < InpWebIntervalSec) return;
-   m_last_web_time = TimeLocal();
-
-   int total_positions = 0;
-   double total_profit = 0.0;
-   string pairs_json = "";
-
-   for(int i = PositionsTotal() - 1; i >= 0; i--)
-   {
-      ulong ticket = PositionGetTicket(i);
-      if(IsMasterPosition(ticket))
-      {
-         total_positions++;
-         double p_prof = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
-         total_profit += p_prof;
-
-         // Find matching slave position (matches both CT#<ticket> and CT2#<ticket>)
-         string expected_hash = "#" + IntegerToString(ticket);
-         int s_idx = -1;
-         for(int s = 0; s < m_slave_pos_count; s++)
-         {
-            if(StringFind(m_slave_positions[s].comment, expected_hash) >= 0 || StringFind(m_slave_positions[s].comment, IntegerToString(ticket)) >= 0)
-            {
-               s_idx = s;
-               break;
-            }
-         }
-
-         double s_prof = (s_idx >= 0) ? m_slave_positions[s_idx].profit : 0.0;
-         double net_p  = p_prof + s_prof;
-         ulong  s_t    = (s_idx >= 0) ? m_slave_positions[s_idx].ticket : 0;
-         double s_v    = (s_idx >= 0) ? m_slave_positions[s_idx].volume : 0.0;
-         double s_p    = (s_idx >= 0) ? m_slave_positions[s_idx].price_open : 0.0;
-
-         if(pairs_json != "") pairs_json += ",";
-         pairs_json += "{\"master_ticket\":" + IntegerToString(ticket) +
-                       ",\"master_type\":\"" + ((PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_SELL) ? "SELL" : "BUY") + "\"" +
-                       ",\"master_vol\":" + DoubleToString(PositionGetDouble(POSITION_VOLUME), 2) +
-                       ",\"master_price\":" + DoubleToString(PositionGetDouble(POSITION_PRICE_OPEN), 2) +
-                       ",\"master_profit\":" + DoubleToString(p_prof, 2) +
-                       ",\"slave_ticket\":" + IntegerToString(s_t) +
-                       ",\"slave_type\":\"" + ((s_idx >= 0 && m_slave_positions[s_idx].type == 1) ? "SELL" : "BUY") + "\"" +
-                       ",\"slave_vol\":" + DoubleToString(s_v, 2) +
-                       ",\"slave_price\":" + DoubleToString(s_p, 2) +
-                       ",\"slave_profit\":" + DoubleToString(s_prof, 2) +
-                       ",\"net_profit\":" + DoubleToString(net_p, 2) + "}";
-      }
-   }
-
-   double balance          = AccountInfoDouble(ACCOUNT_BALANCE);
-   double ref_bal          = GetReferenceBalance();
-   double net_fl           = total_profit + (m_slave_online ? m_slave_profit : 0.0);
-   double base_tp_calc     = GetBaseTPAmount(ref_bal);
-   double deficit_rec      = InpEnableDeficitOffset ? m_cycle_realized_deficit : 0.0;
-   double eff_telemetry_tp = (base_tp_calc > 0) ? (base_tp_calc + m_spread_buffer + deficit_rec) : 0.0;
-
-   long cur_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
-   string shield_status = "NORMAL";
-   if(cur_spread > (long)InpMaxSpreadPoints) shield_status = "SPREAD_LOCK";
-   else if(TimeCurrent() < m_spike_cooldown_until) shield_status = "SPIKE_COOLDOWN";
-   else if(IsHighImpactNewsNearby()) shield_status = "NEWS_PAUSE";
-
-   // Calculate real closed deal profits from MT5 History
-   datetime t_now = TimeCurrent();
-   MqlDateTime dt;
-   TimeToStruct(t_now, dt);
-   dt.hour = 0; dt.min = 0; dt.sec = 0;
-   datetime t_today = StructToTime(dt);
-   datetime t_week  = t_today - (dt.day_of_week * 86400);
-   dt.day = 1;
-   datetime t_month = StructToTime(dt);
-
-   double prof_today = GetRealizedProfit(t_today);
-   double prof_week  = GetRealizedProfit(t_week);
-   double prof_month = GetRealizedProfit(t_month);
-   double prof_all   = GetRealizedProfit(0);
-
-   string payload = "{\"login\":" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) +
-                    ",\"client_name\":\"" + InpClientName + "\"" +
-                    ",\"referral_code\":\"" + InpReferralCode + "\"" +
-                    ",\"symbol\":\"" + m_symbol + "\"" +
-                    ",\"pair_id\":" + IntegerToString(m_pair_id) +
-                    ",\"shield_status\":\"" + shield_status + "\"" +
-                    ",\"cur_spread\":" + IntegerToString(cur_spread) +
-                    ",\"net_floating\":" + DoubleToString(net_fl, 2) +
-                    ",\"target_tp\":" + DoubleToString(eff_telemetry_tp, 2) +
-                    ",\"profit_today\":" + DoubleToString(prof_today, 2) +
-                    ",\"profit_week\":" + DoubleToString(prof_week, 2) +
-                    ",\"profit_month\":" + DoubleToString(prof_month, 2) +
-                    ",\"profit_all_time\":" + DoubleToString(prof_all, 2) +
-                    ",\"master\":{\"login\":" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) +
-                                 ",\"equity\":" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2) +
-                                 ",\"balance\":" + DoubleToString(balance, 2) +
-                                 ",\"free_margin\":" + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_FREE), 2) +
-                                 ",\"margin_level\":" + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_LEVEL), 2) +
-                                 ",\"profit\":" + DoubleToString(total_profit, 2) +
-                                 ",\"count\":" + IntegerToString(total_positions) + "}" +
-                    ",\"slave\":{\"login\":" + IntegerToString(m_slave_login) +
-                                ",\"equity\":" + DoubleToString(m_slave_equity, 2) +
-                                ",\"balance\":" + DoubleToString(m_slave_balance, 2) +
-                                ",\"credit\":" + DoubleToString(m_slave_credit, 2) +
-                                ",\"free_margin\":" + DoubleToString(m_slave_free_margin, 2) +
-                                ",\"margin_level\":" + DoubleToString(m_slave_margin_level, 2) +
-                                ",\"profit\":" + DoubleToString(m_slave_profit, 2) +
-                                ",\"count\":" + IntegerToString(m_slave_pos_count) + "}" +
-                    ",\"pairs\":[" + pairs_json + "]}";
-
-   string headers = "Content-Type: application/json\r\nBypass-Tunnel-Reminder: true\r\nUser-Agent: MT5-BonusBot\r\n";
-   char post_data[], result[];
-   string result_headers;
-   StringToCharArray(payload, post_data, 0, WHOLE_ARRAY, CP_UTF8);
-   ArrayResize(post_data, ArraySize(post_data) - 1);
-
-   ResetLastError();
-   int http_res = WebRequest("POST", InpWebDashboardUrl, headers, 1000, post_data, result, result_headers);
-   if(http_res != 200)
-   {
-      int err = GetLastError();
-      static datetime last_diag_time = 0;
-      int alert_interval = (err == 4014) ? 3600 : 60; // Throttled to 1 hour for 4014 whitelist notice
-      if(TimeLocal() - last_diag_time >= alert_interval)
-      {
-         last_diag_time = TimeLocal();
-         PrintFormat("⚠️ [WebDashboard] Telemetry failed! HTTP=%d | Error=%d | URL: %s", http_res, err, InpWebDashboardUrl);
-         if(err == 4014)
-         {
-            Print("❌ [WebDashboard] Error 4014: Domain belum di-whitelist di MT5! Buka Tools -> Options -> Expert Advisors -> Allow WebRequest for listed URL. (Peringatan ini di-throttle 1x per jam)");
-         }
-      }
-   }
+   return;
 }
 
 //+------------------------------------------------------------------+
@@ -3141,7 +3022,7 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
       // Jika ada tiket Master ditutup paksa oleh broker (Stop Out / Margin Call):
       if(deal_entry == DEAL_ENTRY_OUT && deal_reason == DEAL_REASON_SO)
       {
-         if(deal_magic == (long)m_magic || (m_pair_id <= 1 && (deal_magic == 888111 || deal_magic == 888101)) || deal_magic == 0)
+         if(deal_magic == (long)m_magic || (m_pair_id <= 1 && (deal_magic == 888111 || deal_magic == 888101)) || (deal_magic == 0 && IsMasterEAPosition(trans.position)))
          {
             Print("🚨⚡ [MASTER BROKER STOP OUT DETECTED] Tiket Master #", trans.position,
                   " (Deal #", trans.deal, ") TER-STOP OUT BROKER! Mengirim sinyal darurat CLOSE_ALL ke Slave!");
