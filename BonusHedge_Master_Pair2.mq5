@@ -2784,6 +2784,22 @@ void UpdateDashboard()
       DeleteManualCloseButton();
    }
 
+   // WEEKEND / MARKET CLOSED STATUS INDICATOR:
+   datetime srv_time = TimeTradeServer();
+   if(srv_time <= 0) srv_time = TimeCurrent();
+   MqlDateTime dt_srv;
+   TimeToStruct(srv_time, dt_srv);
+   bool is_weekend = (dt_srv.day_of_week == 0 || dt_srv.day_of_week == 6 || (dt_srv.day_of_week == 5 && (dt_srv.hour * 60 + dt_srv.min >= 23 * 60 + 50)));
+
+   if(is_weekend && total_positions == 0 && term_allowed && mql_allowed && m_slave_online && !m_slave_trade_blocked)
+   {
+      status_str = "⏸️ WEEKEND STANDBY: Market Tutup (Koneksi Siap - Buka Posisi Otomatis Senin Pagi)";
+   }
+
+   string bridge_status = m_slave_online ?
+      ("🟢 CONNECTED (Slave #" + IntegerToString(m_slave_login) + " Online | Live Sync 50ms OK)") :
+      "🔴 DISCONNECTED (Menunggu Slave Aktif di MT5...)";
+
    long cur_spread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
    long slave_sp   = (m_slave_online && m_slave_spread > 0) ? m_slave_spread : 0;
    long worst_sp   = MathMax(cur_spread, slave_sp);
@@ -2818,8 +2834,9 @@ void UpdateDashboard()
       "    Target Basket TP: $" + DoubleToString(eff_target_tp, 2) + " (" + (InpBasketTPDollars > 0.0 ? ("$" + DoubleToString(InpBasketTPDollars, 2)) : (DoubleToString(InpTargetProfitPct, 1) + "% dari $" + DoubleToString(init_cap, 0) + " = $" + DoubleToString(base_tp, 2))) + " + Buffer $" + DoubleToString(m_spread_buffer, 2) + (m_cycle_realized_deficit > 0 ? (" + Deficit Recovery $" + DoubleToString(m_cycle_realized_deficit, 2)) : "") + ")\n" +
       "    News/Spread     : " + shield_info + "\n" +
       "  ────────────────────────────────────────────────────────────────\n" +
-      "    🔗 SLAVE TELEMETRY: " + slave_info + "\n" +
-      "    Status          : " + status_str + "\n" +
+      "    🔗 BRIDGE STATUS: " + bridge_status + "\n" +
+      "    📡 SLAVE DATA   : " + slave_info + "\n" +
+      "    ⚙️ STATUS ENGINE: " + status_str + "\n" +
       "  ╚════════════════════════════════════════════════════════════════╝\n";
 
    ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);

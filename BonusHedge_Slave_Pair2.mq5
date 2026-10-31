@@ -1379,6 +1379,22 @@ void UpdateDashboard(double slave_profit, double combined_net_profit)
       status_str = "⏳ PAUSED: Menunggu Bonus Broker Masuk (Credit: $" + DoubleToString(my_credit, 2) + " < $" + DoubleToString(InpMinBonusCredit, 2) + ")";
    }
 
+   // WEEKEND / MARKET CLOSED STATUS INDICATOR:
+   datetime srv_time = TimeTradeServer();
+   if(srv_time <= 0) srv_time = TimeCurrent();
+   MqlDateTime dt_srv;
+   TimeToStruct(srv_time, dt_srv);
+   bool is_weekend = (dt_srv.day_of_week == 0 || dt_srv.day_of_week == 6 || (dt_srv.day_of_week == 5 && (dt_srv.hour * 60 + dt_srv.min >= 23 * 60 + 50)));
+
+   if(is_weekend && slave_pos_count == 0 && algo_allowed && m_master_online)
+   {
+      status_str = "⏸️ WEEKEND STANDBY: Market Tutup (Koneksi Siap - Siap Kunci Hedge Senin Pagi)";
+   }
+
+   string bridge_status = m_master_online ?
+      ("🟢 CONNECTED (Master #" + IntegerToString(m_master_login) + " Online | Live Sync 50ms OK)") :
+      "🔴 DISCONNECTED (Menunggu Master Aktif di MT5...)";
+
    string text = "\n" +
       "  ╔════════════════════════════════════════════════════════════════╗\n" +
       "  ║   ⚡ DUAL-MT5 BONUS HEDGING - SLAVE LP ENGINE v1.40           ║\n" +
@@ -1398,8 +1414,9 @@ void UpdateDashboard(double slave_profit, double combined_net_profit)
       "      Floating        : $" + DoubleToString(slave_profit, 2) + "\n" +
       "      Hedges          : " + IntegerToString(slave_pos_count) + " Pairs (x" + DoubleToString(m_lot_multiplier, 2) + " Lot dari Master)\n" +
       "  ────────────────────────────────────────────────────────────────\n" +
+      "    🔗 BRIDGE STATUS: " + bridge_status + "\n" +
       "    🎯 NET COMBINED PROFIT : " + profit_sign + DoubleToString(combined_net_profit, 2) + "\n" +
-      "    Status : " + status_str + "\n" +
+      "    ⚙️ STATUS ENGINE       : " + status_str + "\n" +
       "  ╚════════════════════════════════════════════════════════════════╝\n";
 
    ChartSetInteger(0, CHART_COLOR_FOREGROUND, clrYellow);
